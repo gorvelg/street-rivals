@@ -1,0 +1,54 @@
+services:
+  web:
+    image: mmi3docker/symfony-2024
+    container_name: street-rivals-web
+    hostname: street-rivals-web
+    restart: always
+    ports:
+      - "8320:80"
+    depends_on:
+      - db
+    volumes:
+      - ./backend/:/var/www/street-rivals/
+      - ./sites/:/etc/apache2/sites-enabled/
+
+  db:
+    image: mariadb:10.11
+    container_name: street-rivals-db
+    hostname: street-rivals-db
+    restart: always
+    volumes:
+      - street-rivals-db-volume:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: PASSWORD
+      MYSQL_DATABASE: street_rivals
+      MYSQL_USER: symfony
+      MYSQL_PASSWORD: PASSWORD
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: street-rivals-phpmyadmin
+    hostname: street-rivals-phpmyadmin
+    restart: always
+    ports:
+      - "8081:80"
+    depends_on:
+      - db
+    environment:
+      PMA_HOST: db
+      MYSQL_ROOT_PASSWORD: PASSWORD
+      MYSQL_USER: symfony
+      MYSQL_PASSWORD: PASSWORD
+      MYSQL_DATABASE: street_rivals
+
+  maildev:
+    image: maildev/maildev
+    container_name: street-rivals-maildev
+    hostname: street-rivals-maildev
+    command: bin/maildev --web 1080 --smtp 1025 --hide-extensions STARTTLS
+    restart: always
+    ports:
+      - "1081:1080"
+
+volumes:
+  street-rivals-db-volume:
