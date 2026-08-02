@@ -3,3 +3,4 @@ backend/vendor/
 backend/var/
 backend/.env.local
 backend/.env.*.local
+/config/jwt/*.pem
