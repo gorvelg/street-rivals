@@ -1,55 +1,123 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Entity;
 
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
 use App\Repository\CarRepository;
+use App\State\CarProcessor;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Attribute\Groups;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: CarRepository::class)]
+#[ApiResource(
+    operations: [
+        new GetCollection(
+            security: "is_granted('ROLE_USER')"
+        ),
+        new Get(
+            security: "object.getUser() == user",
+            securityMessage: 'Cette voiture ne vous appartient pas.'
+        ),
+        new Post(
+            security: "is_granted('ROLE_USER')",
+            processor: CarProcessor::class
+        ),
+        new Patch(
+            security: "object.getUser() == user",
+            securityMessage: 'Cette voiture ne vous appartient pas.',
+            processor: CarProcessor::class
+        ),
+    ],
+    normalizationContext: [
+        'groups' => ['car:read'],
+    ],
+    denormalizationContext: [
+        'groups' => ['car:write'],
+    ],
+)]
 class Car
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['car:read'])]
     private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'cars')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?User $user = null;
 
-    #[ORM\Column(length: 32)]
-    private ?string $pilot_name = null;
+    #[ORM\Column(name: 'pilot_name', length: 32)]
+    #[Groups(['car:read', 'car:write'])]
+    #[Assert\NotBlank(message: 'Le nom du pilote est obligatoire.')]
+    #[Assert\Length(
+        min: 3,
+        max: 32,
+        minMessage: 'Le nom du pilote doit contenir au moins {{ limit }} caractères.',
+        maxMessage: 'Le nom du pilote ne peut pas dépasser {{ limit }} caractères.'
+    )]
+    private ?string $pilotName = null;
 
     #[ORM\Column(length: 7)]
+    #[Groups(['car:read', 'car:write'])]
+    #[Assert\NotBlank(message: 'La couleur est obligatoire.')]
+    #[Assert\Regex(
+        pattern: '/^#[0-9A-Fa-f]{6}$/',
+        message: 'La couleur doit être au format hexadécimal, par exemple #FF0000.'
+    )]
     private ?string $color = null;
 
     #[ORM\Column]
-    private ?int $money = 0;
+    #[Groups(['car:read'])]
+    private int $money = 0;
 
     #[ORM\Column(type: Types::SMALLINT)]
-    private ?int $speed = 10;
+    #[Groups(['car:read'])]
+    private int $speed = 10;
 
     #[ORM\Column(type: Types::SMALLINT)]
-    private ?int $acceleration = 10;
+    #[Groups(['car:read'])]
+    private int $acceleration = 10;
 
     #[ORM\Column(type: Types::SMALLINT)]
-    private ?int $grip = 10;
+    #[Groups(['car:read'])]
+    private int $grip = 10;
 
     #[ORM\Column(type: Types::SMALLINT)]
-    private ?int $solidity = 10;
+    #[Groups(['car:read'])]
+    private int $solidity = 10;
 
     #[ORM\Column(type: Types::SMALLINT)]
-    private ?int $level = 1;
+    #[Groups(['car:read'])]
+    private int $level = 1;
 
     #[ORM\Column]
-    private ?int $xp = 0;
+    #[Groups(['car:read'])]
+    private int $xp = 0;
 
-    #[ORM\Column]
-    private ?\DateTimeImmutable $created_at = null;
+    #[ORM\Column(name: 'created_at')]
+    #[Groups(['car:read'])]
+    private \DateTimeImmutable $createdAt;
 
-    #[ORM\Column]
-    private ?\DateTimeImmutable $updated_at = null;
+    #[ORM\Column(name: 'updated_at')]
+    #[Groups(['car:read'])]
+    private \DateTimeImmutable $updatedAt;
+
+    public function __construct()
+    {
+        $now = new \DateTimeImmutable();
+
+        $this->createdAt = $now;
+        $this->updatedAt = $now;
+    }
 
     public function getId(): ?int
     {
@@ -61,7 +129,7 @@ class Car
         return $this->user;
     }
 
-    public function setUser(?User $user): static
+    public function setUser(User $user): static
     {
         $this->user = $user;
 
@@ -70,12 +138,12 @@ class Car
 
     public function getPilotName(): ?string
     {
-        return $this->pilot_name;
+        return $this->pilotName;
     }
 
-    public function setPilotName(string $pilot_name): static
+    public function setPilotName(string $pilotName): static
     {
-        $this->pilot_name = $pilot_name;
+        $this->pilotName = trim($pilotName);
 
         return $this;
     }
@@ -87,12 +155,12 @@ class Car
 
     public function setColor(string $color): static
     {
-        $this->color = $color;
+        $this->color = strtoupper($color);
 
         return $this;
     }
 
-    public function getMoney(): ?int
+    public function getMoney(): int
     {
         return $this->money;
     }
@@ -104,7 +172,7 @@ class Car
         return $this;
     }
 
-    public function getSpeed(): ?int
+    public function getSpeed(): int
     {
         return $this->speed;
     }
@@ -116,7 +184,7 @@ class Car
         return $this;
     }
 
-    public function getAcceleration(): ?int
+    public function getAcceleration(): int
     {
         return $this->acceleration;
     }
@@ -128,7 +196,7 @@ class Car
         return $this;
     }
 
-    public function getGrip(): ?int
+    public function getGrip(): int
     {
         return $this->grip;
     }
@@ -140,7 +208,7 @@ class Car
         return $this;
     }
 
-    public function getSolidity(): ?int
+    public function getSolidity(): int
     {
         return $this->solidity;
     }
@@ -152,7 +220,7 @@ class Car
         return $this;
     }
 
-    public function getLevel(): ?int
+    public function getLevel(): int
     {
         return $this->level;
     }
@@ -164,7 +232,7 @@ class Car
         return $this;
     }
 
-    public function getXp(): ?int
+    public function getXp(): int
     {
         return $this->xp;
     }
@@ -176,27 +244,18 @@ class Car
         return $this;
     }
 
-    public function getCreatedAt(): ?\DateTimeImmutable
+    public function getCreatedAt(): \DateTimeImmutable
     {
-        return $this->created_at;
+        return $this->createdAt;
     }
 
-    public function setCreatedAt(\DateTimeImmutable $created_at): static
+    public function getUpdatedAt(): \DateTimeImmutable
     {
-        $this->created_at = $created_at;
-
-        return $this;
+        return $this->updatedAt;
     }
 
-    public function getUpdatedAt(): ?\DateTimeImmutable
+    public function touch(): void
     {
-        return $this->updated_at;
-    }
-
-    public function setUpdatedAt(\DateTimeImmutable $updated_at): static
-    {
-        $this->updated_at = $updated_at;
-
-        return $this;
+        $this->updatedAt = new \DateTimeImmutable();
     }
 }
