@@ -9,6 +9,7 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use App\Repository\CarCardRepository;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -46,6 +47,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class CarCard
 {
+
+    public const MAX_TIER = 3;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -75,6 +79,10 @@ class CarCard
     #[ORM\Column(name: 'is_equipped')]
     #[Groups(['car-card:read', 'car-card:write'])]
     private bool $isEquipped = true;
+
+    #[ORM\Column(type: Types::SMALLINT)]
+    #[Groups(['car-card:read'])]
+    private int $tier = 1;
 
     #[ORM\Column(name: 'acquired_level')]
     #[Assert\Positive]
@@ -160,5 +168,30 @@ class CarCard
         $this->acquiredAt = $acquiredAt;
 
         return $this;
+    }
+
+
+    public function getTier(): int
+    {
+        return $this->tier;
+    }
+
+    public function canUpgrade(): bool
+    {
+        return $this->tier < self::MAX_TIER;
+    }
+
+    public function upgrade(): void
+    {
+        if (!$this->canUpgrade()) {
+            throw new \DomainException(
+                sprintf(
+                    'Cette carte a déjà atteint le palier maximal %d.',
+                    self::MAX_TIER
+                )
+            );
+        }
+
+        ++$this->tier;
     }
 }

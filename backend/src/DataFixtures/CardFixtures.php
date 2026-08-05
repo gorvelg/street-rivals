@@ -14,55 +14,99 @@ final class CardFixtures extends Fixture
     {
         $cards = [
             [
-                'code' => 'turbo_stage_1',
-                'name' => 'Turbo Stage 1',
-                'description' => '+2 Vitesse.',
+                'code' => 'engine_turbo',
+                'name' => 'Turbo moteur',
+                'description' => 'Augmente la Vitesse de la voiture.',
                 'rarity' => 'COMMON',
                 'type' => 'PASSIVE',
                 'effectConfig' => [
                     'kind' => 'stat_bonus',
                     'stat' => 'speed',
-                    'value' => 2,
+                    'tiers' => [
+                        '1' => [
+                            'value' => 2,
+                        ],
+                        '2' => [
+                            'value' => 4,
+                        ],
+                        '3' => [
+                            'value' => 7,
+                        ],
+                    ],
                 ],
             ],
             [
                 'code' => 'semi_slick_tires',
                 'name' => 'Pneus semi-slick',
-                'description' => '+3 Grip.',
+                'description' => 'Augmente le Grip de la voiture.',
                 'rarity' => 'COMMON',
                 'type' => 'PASSIVE',
                 'effectConfig' => [
                     'kind' => 'stat_bonus',
                     'stat' => 'grip',
-                    'value' => 3,
+                    'tiers' => [
+                        '1' => [
+                            'value' => 3,
+                        ],
+                        '2' => [
+                            'value' => 5,
+                        ],
+                        '3' => [
+                            'value' => 8,
+                        ],
+                    ],
                 ],
             ],
             [
                 'code' => 'turbo',
                 'name' => 'Turbo',
-                'description' => 'Accorde un bonus de vitesse sur une ligne droite.',
+                'description' => 'Accorde un bonus de Vitesse sur une ligne droite.',
                 'rarity' => 'RARE',
                 'type' => 'ACTIVE',
                 'effectConfig' => [
                     'kind' => 'event_stat_bonus',
                     'event' => 'straight',
                     'stat' => 'speed',
-                    'value' => 8,
-                    'maxActivations' => 1,
+                    'tiers' => [
+                        '1' => [
+                            'value' => 8,
+                            'maxActivations' => 1,
+                        ],
+                        '2' => [
+                            'value' => 11,
+                            'maxActivations' => 1,
+                        ],
+                        '3' => [
+                            'value' => 14,
+                            'maxActivations' => 2,
+                        ],
+                    ],
                 ],
             ],
             [
                 'code' => 'drift',
                 'name' => 'Drift',
-                'description' => 'Accorde un bonus de Grip dans un virage.',
+                'description' => 'Accorde un bonus de Grip dans les virages.',
                 'rarity' => 'RARE',
                 'type' => 'ACTIVE',
                 'effectConfig' => [
                     'kind' => 'event_stat_bonus',
                     'event' => 'turn',
                     'stat' => 'grip',
-                    'value' => 8,
-                    'maxActivations' => 1,
+                    'tiers' => [
+                        '1' => [
+                            'value' => 8,
+                            'maxActivations' => 1,
+                        ],
+                        '2' => [
+                            'value' => 11,
+                            'maxActivations' => 1,
+                        ],
+                        '3' => [
+                            'value' => 15,
+                            'maxActivations' => 2,
+                        ],
+                    ],
                 ],
             ],
         ];

@@ -13,6 +13,7 @@ use App\Entity\User;
 use App\Repository\CarCardRepository;
 use App\Repository\CardChoiceRepository;
 use App\Repository\CardRepository;
+use App\Service\CarProgressionService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,6 +34,7 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
         private readonly CardRepository $cardRepository,
         private readonly CarCardRepository $carCardRepository,
         private readonly EntityManagerInterface $entityManager,
+        private readonly CarProgressionService $carProgressionService,
     ) {
     }
 
@@ -78,7 +80,15 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
-        if ($choice->getCar()?->getUser()?->getId() !== $user->getId()) {
+        $car = $choice->getCar();
+
+        if ($car === null) {
+            throw new \LogicException(
+                'Le choix de cartes ne possède aucune voiture.'
+            );
+        }
+
+        if ($car->getUser()?->getId() !== $user->getId()) {
             throw new AccessDeniedHttpException(
                 'Ce choix ne vous appartient pas.'
             );
@@ -106,27 +116,52 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
         }
 
         $existingCarCard = $this->carCardRepository->findOneBy([
-            'car' => $choice->getCar(),
+            'car' => $car,
             'card' => $card,
         ]);
 
+        /*
+         * La voiture possède déjà la carte :
+         * on augmente son palier.
+         */
         if ($existingCarCard instanceof CarCard) {
-            throw new ConflictHttpException(
-                'Cette voiture possède déjà cette carte.'
-            );
+            if (!$existingCarCard->canUpgrade()) {
+                throw new ConflictHttpException(
+                    'Cette carte a déjà atteint son palier maximal.'
+                );
+            }
+
+            $existingCarCard->upgrade();
+        } else {
+            /*
+             * Première acquisition :
+             * création de la carte au palier 1.
+             */
+            $carCard = new CarCard();
+
+            $carCard
+                ->setCar($car)
+                ->setCard($card)
+                ->setEquipped(true)
+                ->setAcquiredLevel($choice->getLevel());
+
+            $this->entityManager->persist($carCard);
         }
 
+        /*
+         * Le choix est désormais définitif.
+         */
         $choice->selectCard($card);
 
-        $carCard = new CarCard();
+        /*
+         * Si la voiture possède assez d’XP pour monter de nouveau,
+         * la progression se poursuit après la résolution du choix.
+         */
+        $this->carProgressionService->processNextLevelIfPossible(
+            $car,
+            $choice
+        );
 
-        $carCard
-            ->setCar($choice->getCar())
-            ->setCard($card)
-            ->setEquipped(true)
-            ->setAcquiredLevel($choice->getLevel());
-
-        $this->entityManager->persist($carCard);
         $this->entityManager->flush();
 
         return $choice;

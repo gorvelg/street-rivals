@@ -45,6 +45,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class Car
 {
+    public const BASE_XP_REQUIRED = 100;
+    public const XP_INCREASE_PER_LEVEL = 50;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -257,5 +260,59 @@ class Car
     public function touch(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+    }
+    #[Groups(['car:read'])]
+    public function getXpRequiredForNextLevel(): int
+    {
+        return self::BASE_XP_REQUIRED
+            + (($this->level - 1) * self::XP_INCREASE_PER_LEVEL);
+    }
+
+    #[Groups(['car:read'])]
+    public function getXpProgressPercent(): float
+    {
+        $requiredXp = $this->getXpRequiredForNextLevel();
+
+        if ($requiredXp <= 0) {
+            return 0.0;
+        }
+
+        return min(
+            100.0,
+            round(($this->xp / $requiredXp) * 100, 2)
+        );
+    }
+
+    public function addXp(int $amount): void
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException(
+                'Le montant d’XP doit être supérieur à zéro.'
+            );
+        }
+
+        $this->xp += $amount;
+        $this->touch();
+    }
+
+    public function canLevelUp(): bool
+    {
+        return $this->xp >= $this->getXpRequiredForNextLevel();
+    }
+
+    public function levelUp(): void
+    {
+        if (!$this->canLevelUp()) {
+            throw new \DomainException(
+                'La voiture ne possède pas assez d’XP.'
+            );
+        }
+
+        $requiredXp = $this->getXpRequiredForNextLevel();
+
+        $this->xp -= $requiredXp;
+        ++$this->level;
+
+        $this->touch();
     }
 }
