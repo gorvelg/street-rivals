@@ -46,7 +46,7 @@ class Card
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private ?int $id = null;
 
     /**
@@ -60,35 +60,35 @@ class Card
         pattern: '/^[a-z0-9_]+$/',
         message: 'Le code doit contenir uniquement des minuscules, chiffres et underscores.'
     )]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private ?string $code = null;
 
     #[ORM\Column(length: 100)]
     #[Assert\NotBlank]
     #[Assert\Length(max: 100)]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private ?string $name = null;
 
     #[ORM\Column(type: Types::TEXT)]
     #[Assert\NotBlank]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private ?string $description = null;
 
     #[ORM\Column(length: 20)]
     #[Assert\Choice(choices: self::RARITIES)]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private string $rarity = 'COMMON';
 
     #[ORM\Column(length: 20)]
     #[Assert\Choice(choices: self::TYPES)]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private string $type = 'PASSIVE';
 
     /**
      * Configuration interprétée plus tard par le moteur de jeu.
      */
     #[ORM\Column(type: Types::JSON)]
-    #[Groups(['card:read'])]
+    #[Groups(['card:read', 'card-choice:read'])]
     private array $effectConfig = [];
 
     /**
