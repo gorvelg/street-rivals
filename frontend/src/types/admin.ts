@@ -61,3 +61,75 @@ export interface AdminUserStatusResponse {
     roles: string[]
     isActive: boolean
 }
+export interface AdminUserDetailAccount {
+    id: number
+    email: string
+    roles: string[]
+    isActive: boolean
+}
+
+export interface AdminUserDetailStatistics {
+    carCount: number
+    duelCount: number
+    wins: number
+    losses: number
+    lastLoginAt: string | null
+}
+
+export interface AdminUserDetailCarStats {
+    speed: number
+    acceleration: number
+    grip: number
+    solidity: number
+}
+
+export interface AdminUserDetailCar {
+    id: number
+    pilotName: string
+    color: string
+
+    level: number
+    xp: number
+    money: number
+
+    rating: number
+    wins: number
+    losses: number
+
+    stats: AdminUserDetailCarStats
+}
+
+export interface AdminUserDetailEvent {
+    id: number
+    type: string
+    carId: number | null
+    duelId: number | null
+    payload: Record<string, unknown>
+    occurredAt: string
+}
+
+export interface AdminUserDetailDuelCar {
+    id: number
+    pilotName: string
+    color: string
+}
+
+export interface AdminUserDetailDuel {
+    id: number
+
+    userCar: AdminUserDetailDuelCar
+    opponentCar: AdminUserDetailDuelCar
+
+    winnerCarId: number
+    won: boolean
+    finalGap: number
+    createdAt: string
+}
+
+export interface AdminUserDetail {
+    user: AdminUserDetailAccount
+    statistics: AdminUserDetailStatistics
+    cars: AdminUserDetailCar[]
+    recentEvents: AdminUserDetailEvent[]
+    recentDuels: AdminUserDetailDuel[]
+}

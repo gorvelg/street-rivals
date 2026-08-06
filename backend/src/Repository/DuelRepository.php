@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Car;
 use App\Entity\Duel;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -75,5 +76,61 @@ class DuelRepository extends ServiceEntityRepository
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+    public function countForUser(
+        User $user,
+    ): int {
+        return (int) $this->createQueryBuilder('duel')
+            ->select('COUNT(duel.id)')
+            ->innerJoin(
+                'duel.attackerCar',
+                'attacker'
+            )
+            ->innerJoin(
+                'duel.defenderCar',
+                'defender'
+            )
+            ->andWhere(
+                'attacker.user = :user OR defender.user = :user'
+            )
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    /**
+     * @return list<Duel>
+     */
+    public function findRecentForUser(
+        User $user,
+        int $limit = 10,
+    ): array {
+        return $this->createQueryBuilder('duel')
+            ->addSelect(
+                'attacker',
+                'defender',
+                'winner'
+            )
+            ->innerJoin(
+                'duel.attackerCar',
+                'attacker'
+            )
+            ->innerJoin(
+                'duel.defenderCar',
+                'defender'
+            )
+            ->innerJoin(
+                'duel.winnerCar',
+                'winner'
+            )
+            ->andWhere(
+                'attacker.user = :user OR defender.user = :user'
+            )
+            ->setParameter('user', $user)
+            ->orderBy('duel.createdAt', 'DESC')
+            ->addOrderBy('duel.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 }

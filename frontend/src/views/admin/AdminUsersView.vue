@@ -6,6 +6,7 @@ import { useAdminUsersStore }
   from '../../stores/adminUsers'
 import type { AdminUser }
   from '../../types/admin'
+import { RouterLink } from 'vue-router'
 
 const usersStore = useAdminUsersStore()
 
@@ -193,7 +194,17 @@ async function toggleUserStatus(
             </td>
 
             <td>
-              {{ user.email }}
+              <RouterLink
+                  :to="{
+      name: 'admin-user-detail',
+      params: {
+        id: user.id,
+      },
+    }"
+                  class="user-detail-link"
+              >
+                {{ user.email }}
+              </RouterLink>
             </td>
 
             <td>
@@ -552,5 +563,14 @@ async function toggleUserStatus(
 
 .user-disabled-row {
   opacity: 0.58;
+}
+.user-detail-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.user-detail-link:hover {
+  text-decoration: underline;
 }
 </style>

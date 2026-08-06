@@ -8,6 +8,7 @@ use App\Entity\GameEvent;
 use App\Enum\GameEventType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use App\Entity\User;
 
 /**
  * @extends ServiceEntityRepository<GameEvent>
@@ -47,5 +48,38 @@ final class GameEventRepository extends ServiceEntityRepository
             ->setParameter('since', $since)
             ->getQuery()
             ->getSingleScalarResult();
+    }
+
+    /**
+     * @return list<GameEvent>
+     */
+    public function findRecentForUser(
+        User $user,
+        int $limit = 20,
+    ): array {
+        return $this->createQueryBuilder('event')
+            ->andWhere('event.user = :user')
+            ->setParameter('user', $user)
+            ->orderBy('event.occurredAt', 'DESC')
+            ->addOrderBy('event.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
+
+    public function findLastForUserAndType(
+        User $user,
+        GameEventType $type,
+    ): ?GameEvent {
+        return $this->createQueryBuilder('event')
+            ->andWhere('event.user = :user')
+            ->andWhere('event.type = :type')
+            ->setParameter('user', $user)
+            ->setParameter('type', $type)
+            ->orderBy('event.occurredAt', 'DESC')
+            ->addOrderBy('event.id', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
     }
 }
