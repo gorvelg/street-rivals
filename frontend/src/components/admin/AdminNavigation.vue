@@ -18,9 +18,12 @@ import { RouterLink } from 'vue-router'
       Utilisateurs
     </RouterLink>
 
-    <span class="admin-navigation-link disabled">
+    <RouterLink
+        :to="{ name: 'admin-cars' }"
+        class="admin-navigation-link"
+    >
       Voitures
-    </span>
+    </RouterLink>
 
     <span class="admin-navigation-link disabled">
       Duels

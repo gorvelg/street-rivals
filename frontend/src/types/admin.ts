@@ -133,3 +133,40 @@ export interface AdminUserDetail {
     recentEvents: AdminUserDetailEvent[]
     recentDuels: AdminUserDetailDuel[]
 }
+
+export interface AdminCarOwner {
+    id: number
+    email: string
+    isActive: boolean
+}
+
+export interface AdminCar {
+    id: number
+    pilotName: string
+    color: string
+
+    owner: AdminCarOwner
+
+    level: number
+    xp: number
+    money: number
+    rating: number
+
+    wins: number
+    losses: number
+    cardCount: number
+
+    lastDuelAt: string | null
+}
+
+export interface AdminCarsFilters {
+    search: string | null
+    minLevel: number | null
+    minRating: number | null
+}
+
+export interface AdminCarsResponse {
+    members: AdminCar[]
+    pagination: AdminPagination
+    filters: AdminCarsFilters
+}
