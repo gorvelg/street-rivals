@@ -349,3 +349,83 @@ export interface AdminDuelsResponse {
     pagination: AdminPagination
     filters: AdminDuelsFilters
 }
+export type AdminJsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | AdminJsonValue[]
+    | {
+    [key: string]: AdminJsonValue
+}
+
+export interface AdminDuelDetailOwner {
+    id: number | null
+    email: string | null
+    isActive: boolean
+}
+
+export interface AdminDuelDetailCar {
+    id: number
+    pilotName: string
+    color: string
+
+    level: number
+    rating: number
+    wins: number
+    losses: number
+
+    owner: AdminDuelDetailOwner
+}
+
+export interface AdminDuelDetailMain {
+    id: number
+    createdAt: string
+
+    finalGap: number
+    randomSeed: string
+    engineVersion: string
+
+    winnerCarId: number
+    winnerSide: AdminDuelWinnerSide
+}
+
+export interface AdminDuelDetailReward {
+    xp: number
+    money: number
+}
+
+export interface AdminDuelDetailRewards {
+    attacker: AdminDuelDetailReward
+    defender: AdminDuelDetailReward
+}
+
+export interface AdminDuelDetailRatingSide {
+    before: number
+    after: number
+    delta: number
+}
+
+export interface AdminDuelDetailRating {
+    attacker: AdminDuelDetailRatingSide
+    defender: AdminDuelDetailRatingSide
+}
+
+export interface AdminDuelDetailSnapshots {
+    attacker: AdminJsonValue
+    defender: AdminJsonValue
+}
+
+export interface AdminDuelDetail {
+    duel: AdminDuelDetailMain
+
+    attacker: AdminDuelDetailCar
+    defender: AdminDuelDetailCar
+
+    rewards: AdminDuelDetailRewards
+    rating: AdminDuelDetailRating
+    snapshots: AdminDuelDetailSnapshots
+
+    antiFarming: AdminJsonValue
+    replayData: AdminJsonValue
+}

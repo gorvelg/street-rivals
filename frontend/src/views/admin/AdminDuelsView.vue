@@ -193,7 +193,17 @@ onUnmounted((): void => {
         >
           <header class="duel-card-header">
             <div>
-              <strong>Duel #{{ duel.id }}</strong>
+              <RouterLink
+                  :to="{
+    name: 'admin-duel-detail',
+    params: {
+      id: duel.id,
+    },
+  }"
+                  class="duel-detail-link"
+              >
+                Duel #{{ duel.id }}
+              </RouterLink>
 
               <small>
                 {{ formatDate(duel.createdAt) }}
@@ -636,5 +646,14 @@ button:disabled {
   .versus {
     min-height: 30px;
   }
+}
+.duel-detail-link {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.duel-detail-link:hover {
+  text-decoration: underline;
 }
 </style>
