@@ -133,6 +133,30 @@ class Duel
     #[Groups(['duel:read'])]
     private int $defenderMoneyReward;
 
+    #[ORM\Column(name: 'attacker_rating_before', nullable: true)]
+    #[Groups(['duel:read'])]
+    private ?int $attackerRatingBefore = null;
+
+    #[ORM\Column(name: 'attacker_rating_after', nullable: true)]
+    #[Groups(['duel:read'])]
+    private ?int $attackerRatingAfter = null;
+
+    #[ORM\Column(name: 'attacker_rating_delta', nullable: true)]
+    #[Groups(['duel:read'])]
+    private ?int $attackerRatingDelta = null;
+
+    #[ORM\Column(name: 'defender_rating_before', nullable: true)]
+    #[Groups(['duel:read'])]
+    private ?int $defenderRatingBefore = null;
+
+    #[ORM\Column(name: 'defender_rating_after', nullable: true)]
+    #[Groups(['duel:read'])]
+    private ?int $defenderRatingAfter = null;
+
+    #[ORM\Column(name: 'defender_rating_delta', nullable: true)]
+    #[Groups(['duel:read'])]
+    private ?int $defenderRatingDelta = null;
+
     /**
      * @param array<string, mixed> $attackerSnapshot
      * @param array<string, mixed> $defenderSnapshot
@@ -152,6 +176,12 @@ class Duel
         int $attackerMoneyReward,
         int $defenderXpReward,
         int $defenderMoneyReward,
+        int $attackerRatingBefore,
+        int $attackerRatingAfter,
+        int $attackerRatingDelta,
+        int $defenderRatingBefore,
+        int $defenderRatingAfter,
+        int $defenderRatingDelta,
     ) {
         $this->attackerCar = $attackerCar;
         $this->defenderCar = $defenderCar;
@@ -167,6 +197,14 @@ class Duel
         $this->attackerMoneyReward = $attackerMoneyReward;
         $this->defenderXpReward = $defenderXpReward;
         $this->defenderMoneyReward = $defenderMoneyReward;
+
+        $this->attackerRatingBefore = $attackerRatingBefore;
+        $this->attackerRatingAfter = $attackerRatingAfter;
+        $this->attackerRatingDelta = $attackerRatingDelta;
+
+        $this->defenderRatingBefore = $defenderRatingBefore;
+        $this->defenderRatingAfter = $defenderRatingAfter;
+        $this->defenderRatingDelta = $defenderRatingDelta;
 
         $this->createdAt = new \DateTimeImmutable();
     }
@@ -253,5 +291,35 @@ class Duel
     public function getDefenderMoneyReward(): int
     {
         return $this->defenderMoneyReward;
+    }
+
+    public function getAttackerRatingBefore(): ?int
+    {
+        return $this->attackerRatingBefore;
+    }
+
+    public function getAttackerRatingAfter(): ?int
+    {
+        return $this->attackerRatingAfter;
+    }
+
+    public function getAttackerRatingDelta(): ?int
+    {
+        return $this->attackerRatingDelta;
+    }
+
+    public function getDefenderRatingBefore(): ?int
+    {
+        return $this->defenderRatingBefore;
+    }
+
+    public function getDefenderRatingAfter(): ?int
+    {
+        return $this->defenderRatingAfter;
+    }
+
+    public function getDefenderRatingDelta(): ?int
+    {
+        return $this->defenderRatingDelta;
     }
 }

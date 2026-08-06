@@ -1,0 +1,93 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Service;
+
+use App\Entity\Car;
+use App\Model\DuelRatingResult;
+
+final class RatingCalculator
+{
+    /**
+     * Facteur de variation Elo.
+     */
+    private const K_FACTOR = 32;
+
+    /**
+     * Écart de référence utilisé par la formule Elo.
+     */
+    private const RATING_SCALE = 400;
+
+    public function calculate(
+        Car $attacker,
+        Car $defender,
+        Car $winner,
+    ): DuelRatingResult {
+        $attackerId = $attacker->getId();
+        $defenderId = $defender->getId();
+        $winnerId = $winner->getId();
+
+        if (
+            $attackerId === null
+            || $defenderId === null
+            || $winnerId === null
+        ) {
+            throw new \LogicException(
+                'Les voitures doivent être enregistrées.'
+            );
+        }
+
+        if (
+            $winnerId !== $attackerId
+            && $winnerId !== $defenderId
+        ) {
+            throw new \LogicException(
+                'La voiture gagnante ne participe pas au duel.'
+            );
+        }
+
+        $attackerBefore = $attacker->getRating();
+        $defenderBefore = $defender->getRating();
+
+        $expectedAttacker = 1 / (
+                1 + 10 ** (
+                    ($defenderBefore - $attackerBefore)
+                    / self::RATING_SCALE
+                )
+            );
+
+        $attackerWon = $winnerId === $attackerId;
+
+        if ($attackerWon) {
+            $attackerDelta = max(
+                1,
+                (int) round(
+                    self::K_FACTOR * (1 - $expectedAttacker)
+                )
+            );
+        } else {
+            $attackerDelta = -max(
+                1,
+                (int) round(
+                    self::K_FACTOR * $expectedAttacker
+                )
+            );
+        }
+
+        /*
+         * Le système reste à somme nulle :
+         * les points gagnés par l’un sont perdus par l’autre.
+         */
+        $defenderDelta = -$attackerDelta;
+
+        return new DuelRatingResult(
+            attackerBefore: $attackerBefore,
+            defenderBefore: $defenderBefore,
+            attackerAfter: $attackerBefore + $attackerDelta,
+            defenderAfter: $defenderBefore + $defenderDelta,
+            attackerDelta: $attackerDelta,
+            defenderDelta: $defenderDelta,
+        );
+    }
+}

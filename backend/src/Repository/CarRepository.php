@@ -53,4 +53,19 @@ class CarRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * @return list<Car>
+     */
+    public function findLeaderboard(int $limit = 100): array
+    {
+        return $this->createQueryBuilder('car')
+            ->orderBy('car.rating', 'DESC')
+            ->addOrderBy('car.wins', 'DESC')
+            ->addOrderBy('car.level', 'DESC')
+            ->addOrderBy('car.id', 'ASC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
+    }
 }

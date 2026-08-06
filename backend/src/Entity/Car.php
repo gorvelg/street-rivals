@@ -128,6 +128,18 @@ class Car
     #[Groups(['car:read'])]
     private int $xp = 0;
 
+    #[ORM\Column(options: ['default' => 1000])]
+    #[Groups(['car:read'])]
+    private int $rating = 1000;
+
+    #[ORM\Column(options: ['default' => 0])]
+    #[Groups(['car:read'])]
+    private int $wins = 0;
+
+    #[ORM\Column(options: ['default' => 0])]
+    #[Groups(['car:read'])]
+    private int $losses = 0;
+
     #[ORM\Column(name: 'created_at')]
     #[Groups(['car:read'])]
     private \DateTimeImmutable $createdAt;
@@ -347,6 +359,70 @@ class Car
         }
 
         $this->money += $amount;
+        $this->touch();
+    }
+
+    public function getRating(): int
+    {
+        return $this->rating;
+    }
+
+    public function getWins(): int
+    {
+        return $this->wins;
+    }
+
+    public function getLosses(): int
+    {
+        return $this->losses;
+    }
+
+    #[Groups(['car:read'])]
+    public function getDuelsPlayed(): int
+    {
+        return $this->wins + $this->losses;
+    }
+
+    #[Groups(['car:read'])]
+    public function getWinRate(): float
+    {
+        $duelsPlayed = $this->getDuelsPlayed();
+
+        if ($duelsPlayed === 0) {
+            return 0.0;
+        }
+
+        return round(
+            ($this->wins / $duelsPlayed) * 100,
+            2
+        );
+    }
+
+    public function recordWin(int $ratingDelta): void
+    {
+        if ($ratingDelta <= 0) {
+            throw new \InvalidArgumentException(
+                'Le gain de classement doit être positif.'
+            );
+        }
+
+        $this->rating += $ratingDelta;
+        ++$this->wins;
+
+        $this->touch();
+    }
+
+    public function recordLoss(int $ratingDelta): void
+    {
+        if ($ratingDelta >= 0) {
+            throw new \InvalidArgumentException(
+                'La perte de classement doit être négative.'
+            );
+        }
+
+        $this->rating += $ratingDelta;
+        ++$this->losses;
+
         $this->touch();
     }
 }
