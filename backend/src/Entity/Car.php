@@ -10,9 +10,11 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Dto\CarStatsOutput;
+use App\Dto\MatchmakingOpponentOutput;
 use App\Repository\CarRepository;
 use App\State\CarProcessor;
 use App\State\CarStatsProvider;
+use App\State\MatchmakingOpponentProvider;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -41,6 +43,19 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "object.getUser() == user",
             securityMessage: 'Cette voiture ne vous appartient pas.',
             processor: CarProcessor::class
+        ),
+        new GetCollection(
+            uriTemplate: '/cars/{id}/opponents',
+            requirements: [
+                'id' => '\d+',
+            ],
+            security: "is_granted('ROLE_USER')",
+            output: MatchmakingOpponentOutput::class,
+            provider: MatchmakingOpponentProvider::class,
+            paginationEnabled: false,
+            normalizationContext: [
+                'groups' => ['matchmaking:read'],
+            ],
         ),
     ],
     normalizationContext: [

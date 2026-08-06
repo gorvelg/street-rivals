@@ -40,4 +40,6 @@ class CardRepository extends ServiceEntityRepository
     //            ->getOneOrNullResult()
     //        ;
     //    }
+
+
 }
