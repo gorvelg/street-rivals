@@ -57,4 +57,24 @@ class CarCardRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+    /**
+     * @return list<CarCard>
+     */
+    /**
+     * @return list<CarCard>
+     */
+    public function findForAdminCar(
+        Car $car,
+    ): array {
+        return $this->createQueryBuilder('carCard')
+            ->addSelect('card')
+            ->innerJoin('carCard.card', 'card')
+            ->andWhere('carCard.car = :car')
+            ->setParameter('car', $car)
+            ->orderBy('carCard.isEquipped', 'DESC')
+            ->addOrderBy('carCard.tier', 'DESC')
+            ->addOrderBy('card.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
 }

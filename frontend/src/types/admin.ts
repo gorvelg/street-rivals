@@ -170,3 +170,135 @@ export interface AdminCarsResponse {
     pagination: AdminPagination
     filters: AdminCarsFilters
 }
+
+export interface AdminCarStats {
+    speed: number
+    acceleration: number
+    grip: number
+    solidity: number
+}
+
+export interface AdminCarDetailMain {
+    id: number
+    pilotName: string
+    color: string
+
+    level: number
+    xp: number
+    money: number
+
+    rating: number
+    wins: number
+    losses: number
+}
+
+export interface AdminCarDetailOwner {
+    id: number | null
+    email: string | null
+    isActive: boolean
+}
+
+export interface AdminCarDetailCardDefinition {
+    id: number | null
+    code: string | null
+    name: string | null
+    type: string | null
+    rarity: string | null
+    effectConfig: Record<string, unknown>
+}
+
+export interface AdminCarDetailOwnedCard {
+    id: number
+    tier: number
+    equipped: boolean
+    acquiredLevel: number
+
+    card: AdminCarDetailCardDefinition
+}
+
+export interface AdminCarChoiceCard {
+    id: number
+    code: string
+    name: string
+    type: string
+    rarity: string
+}
+
+export interface AdminCarPendingChoice {
+    id: number
+    level: number
+    firstCard: AdminCarChoiceCard | null
+    secondCard: AdminCarChoiceCard | null
+}
+
+export interface AdminCarDetailOpponent {
+    id: number
+    pilotName: string
+    color: string
+}
+
+export interface AdminCarDetailDuel {
+    id: number
+
+    opponent: AdminCarDetailOpponent
+
+    wasAttacker: boolean
+    winnerCarId: number
+    won: boolean
+
+    finalGap: number
+    createdAt: string
+}
+
+export interface AdminCarDetailEvent {
+    id: number
+    type: string
+    duelId: number | null
+    payload: Record<string, unknown>
+    occurredAt: string
+}
+
+export interface AdminCarCooldownOpponent {
+    id: number
+    pilotName: string
+    color: string
+}
+
+export interface AdminCarCooldownPair {
+    opponent: AdminCarCooldownOpponent
+
+    lastDuelId: number
+    lastDuelAt: string
+    expiresAt: string
+    remainingSeconds: number
+}
+
+export interface AdminCarCooldown {
+    active: boolean
+    activePairCount: number
+    cooldownSeconds: number
+    pairs: AdminCarCooldownPair[]
+}
+
+export interface AdminCarDetail {
+    car: AdminCarDetailMain
+    owner: AdminCarDetailOwner
+
+    baseStats: AdminCarStats
+    calculatedStats: AdminCarStats
+
+    cards: AdminCarDetailOwnedCard[]
+    pendingCardChoice: AdminCarPendingChoice | null
+
+    recentDuels: AdminCarDetailDuel[]
+    recentEvents: AdminCarDetailEvent[]
+
+    cooldown: AdminCarCooldown
+}
+
+export interface AdminCarCooldownResetResponse {
+    carId: number
+    updatedDuelCount: number
+    cooldownSeconds: number
+    resetAt: string
+}

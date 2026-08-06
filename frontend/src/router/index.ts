@@ -12,6 +12,7 @@ import AdminDashboardView from '../views/admin/AdminDashboardView.vue'
 import AdminUsersView from '../views/admin/AdminUsersView.vue'
 import AdminUserDetailView from '../views/admin/AdminUserDetailView.vue'
 import AdminCarsView from '../views/admin/AdminCarsView.vue'
+import AdminCarDetailView from '../views/admin/AdminCarDetailView.vue'
 
 const routes: RouteRecordRaw[] = [
     {
@@ -77,6 +78,15 @@ const routes: RouteRecordRaw[] = [
         path: '/admin/cars',
         name: 'admin-cars',
         component: AdminCarsView,
+        meta: {
+            requiresAuth: true,
+            requiresAdmin: true,
+        },
+    },
+    {
+        path: '/admin/cars/:id',
+        name: 'admin-car-detail',
+        component: AdminCarDetailView,
         meta: {
             requiresAuth: true,
             requiresAdmin: true,

@@ -217,9 +217,17 @@ onUnmounted((): void => {
                   />
 
                 <div>
-                  <strong>
+                  <RouterLink
+                      :to="{
+    name: 'admin-car-detail',
+    params: {
+      id: car.id,
+    },
+  }"
+                      class="car-detail-link"
+                  >
                     {{ car.pilotName }}
-                  </strong>
+                  </RouterLink>
 
                   <small>
                     #{{ car.id }}
@@ -552,5 +560,14 @@ button:disabled {
   .search-field {
     grid-column: auto;
   }
+}
+.car-detail-link {
+  color: inherit;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.car-detail-link:hover {
+  text-decoration: underline;
 }
 </style>

@@ -16,4 +16,5 @@ enum GameEventType: string
     case CARD_UPGRADED = 'card_upgraded';
 
     case DUEL_COMPLETED = 'duel_completed';
+    case ADMIN_COOLDOWN_RESET = 'admin_cooldown_reset';
 }

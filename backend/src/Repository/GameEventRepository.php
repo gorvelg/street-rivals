@@ -9,6 +9,7 @@ use App\Enum\GameEventType;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use App\Entity\User;
+use App\Entity\Car;
 
 /**
  * @extends ServiceEntityRepository<GameEvent>
@@ -81,5 +82,22 @@ final class GameEventRepository extends ServiceEntityRepository
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();
+    }
+
+    /**
+     * @return list<GameEvent>
+     */
+    public function findRecentForCar(
+        Car $car,
+        int $limit = 20,
+    ): array {
+        return $this->createQueryBuilder('event')
+            ->andWhere('event.car = :car')
+            ->setParameter('car', $car)
+            ->orderBy('event.occurredAt', 'DESC')
+            ->addOrderBy('event.id', 'DESC')
+            ->setMaxResults($limit)
+            ->getQuery()
+            ->getResult();
     }
 }
