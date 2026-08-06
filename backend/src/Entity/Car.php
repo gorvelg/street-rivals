@@ -9,8 +9,10 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
+use App\Dto\CarStatsOutput;
 use App\Repository\CarRepository;
 use App\State\CarProcessor;
+use App\State\CarStatsProvider;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
@@ -23,8 +25,13 @@ use Symfony\Component\Validator\Constraints as Assert;
             security: "is_granted('ROLE_USER')"
         ),
         new Get(
-            security: "object.getUser() == user",
-            securityMessage: 'Cette voiture ne vous appartient pas.'
+            uriTemplate: '/cars/{id}/stats',
+            security: "is_granted('ROLE_USER')",
+            output: CarStatsOutput::class,
+            provider: CarStatsProvider::class,
+            normalizationContext: [
+                'groups' => ['car-stats:read'],
+            ],
         ),
         new Post(
             security: "is_granted('ROLE_USER')",

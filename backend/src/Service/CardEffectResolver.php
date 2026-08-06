@@ -9,6 +9,8 @@ use App\Entity\CarCard;
 final class CardEffectResolver
 {
     /**
+     * Renvoie la configuration correspondant au palier actuel.
+     *
      * @return array<string, mixed>
      */
     public function resolve(CarCard $carCard): array
@@ -17,7 +19,7 @@ final class CardEffectResolver
 
         if ($card === null) {
             throw new \LogicException(
-                'La carte possédée ne contient aucune définition de carte.'
+                'La carte possédée ne possède aucune définition.'
             );
         }
 
@@ -31,24 +33,23 @@ final class CardEffectResolver
             ));
         }
 
-        $tierKey = (string) $carCard->getTier();
-        $tierConfig = $tiers[$tierKey] ?? null;
+        $tier = $carCard->getTier();
+        $tierConfig = $tiers[$tier] ?? $tiers[(string) $tier] ?? null;
 
         if (!is_array($tierConfig)) {
             throw new \LogicException(sprintf(
                 'Le palier %d n’est pas configuré pour la carte "%s".',
-                $carCard->getTier(),
+                $tier,
                 $card->getName()
             ));
         }
 
-        return array_merge(
-            [
-                'kind' => $effectConfig['kind'] ?? null,
-                'stat' => $effectConfig['stat'] ?? null,
-                'event' => $effectConfig['event'] ?? null,
-            ],
-            $tierConfig
-        );
+        /*
+         * On retire le tableau complet des paliers,
+         * puis on ajoute uniquement les valeurs du palier actuel.
+         */
+        unset($effectConfig['tiers']);
+
+        return array_replace($effectConfig, $tierConfig);
     }
 }

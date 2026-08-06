@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\CarCard;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+use App\Entity\Car;
 
 /**
  * @extends ServiceEntityRepository<CarCard>
@@ -40,4 +41,20 @@ class CarCardRepository extends ServiceEntityRepository
     //            ->getOneOrNullResult()
     //        ;
     //    }
+
+    /**
+     * @return list<CarCard>
+     */
+    public function findEquippedByCar(Car $car): array
+    {
+        return $this->createQueryBuilder('carCard')
+            ->addSelect('card')
+            ->innerJoin('carCard.card', 'card')
+            ->andWhere('carCard.car = :car')
+            ->andWhere('carCard.isEquipped = :isEquipped')
+            ->setParameter('car', $car)
+            ->setParameter('isEquipped', true)
+            ->getQuery()
+            ->getResult();
+    }
 }
