@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import {
+  RouterLink,
+  RouterView,
+  useRouter,
+} from 'vue-router'
 import { useAuthStore } from './stores/auth'
 
 const authStore = useAuthStore()
@@ -7,7 +11,8 @@ const router = useRouter()
 
 function logout(): void {
   authStore.logout()
-  router.push({
+
+  void router.push({
     name: 'login',
   })
 }
@@ -20,14 +25,33 @@ function logout(): void {
         class="main-header"
     >
       <RouterLink
-          to="/garage"
+          :to="{ name: 'garage' }"
           class="brand"
       >
         Street Rivals
       </RouterLink>
 
+      <nav class="main-navigation">
+        <RouterLink
+            :to="{ name: 'garage' }"
+            class="navigation-link"
+        >
+          Garage
+        </RouterLink>
+
+        <RouterLink
+            v-if="authStore.isAdmin"
+            :to="{ name: 'admin-dashboard' }"
+            class="navigation-link"
+        >
+          Administration
+        </RouterLink>
+      </nav>
+
       <div class="header-user">
-        <span>{{ authStore.user?.email }}</span>
+        <span class="header-user-email">
+          {{ authStore.user?.email }}
+        </span>
 
         <button
             type="button"

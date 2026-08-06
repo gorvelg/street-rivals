@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Car;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -32,6 +33,100 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         $this->getEntityManager()->persist($user);
         $this->getEntityManager()->flush();
     }
+
+    public function findAdminPage(
+        ?string $search,
+        int $page,
+        int $itemsPerPage,
+    ): array {
+        $queryBuilder = $this->createQueryBuilder('user')
+            ->select([
+                'user.id AS id',
+                'user.email AS email',
+                'user.roles AS roles',
+                'COUNT(car.id) AS carCount',
+            ])
+            ->leftJoin(
+                Car::class,
+                'car',
+                'WITH',
+                'car.user = user'
+            )
+            ->groupBy('user.id')
+            ->addGroupBy('user.email')
+            ->addGroupBy('user.roles')
+            ->orderBy('user.id', 'DESC')
+            ->setFirstResult(
+                ($page - 1) * $itemsPerPage
+            )
+            ->setMaxResults($itemsPerPage);
+
+        if ($search !== null && $search !== '') {
+            $queryBuilder
+                ->andWhere(
+                    'LOWER(user.email) LIKE :search'
+                )
+                ->setParameter(
+                    'search',
+                    '%' . mb_strtolower($search) . '%'
+                );
+        }
+
+        $results = $queryBuilder
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_map(
+            static function (array $result): array {
+                $roles = $result['roles'] ?? [];
+
+                if (!is_array($roles)) {
+                    $roles = [];
+                }
+
+                /*
+                 * ROLE_USER est ajouté automatiquement par
+                 * User::getRoles(), mais il n’est pas forcément
+                 * stocké dans la colonne JSON.
+                 */
+                $roles[] = 'ROLE_USER';
+
+                return [
+                    'id' => (int) $result['id'],
+                    'email' => (string) $result['email'],
+                    'roles' => array_values(
+                        array_unique($roles)
+                    ),
+                    'carCount' =>
+                        (int) $result['carCount'],
+                ];
+            },
+            $results
+        );
+    }
+
+    public function countForAdminSearch(
+        ?string $search,
+    ): int {
+        $queryBuilder = $this->createQueryBuilder('user')
+            ->select('COUNT(user.id)');
+
+        if ($search !== null && $search !== '') {
+            $queryBuilder
+                ->andWhere(
+                    'LOWER(user.email) LIKE :search'
+                )
+                ->setParameter(
+                    'search',
+                    '%' . mb_strtolower($search) . '%'
+                );
+        }
+
+        return (int) $queryBuilder
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
 
     //    /**
     //     * @return User[] Returns an array of User objects

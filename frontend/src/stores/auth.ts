@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { getJwtRoles } from '../utils/jwt'
 import { defineStore } from 'pinia'
 import {
     apiRequest,
@@ -8,8 +9,18 @@ import {
 } from '../services/api'
 import type { AuthTokenResponse, User } from '../types/api'
 
+
 export const useAuthStore = defineStore('auth', () => {
     const token = ref<string | null>(getStoredToken())
+
+    const roles = computed<string[]>(() => {
+        return getJwtRoles(token.value)
+    })
+
+    const isAdmin = computed<boolean>(() => {
+        return roles.value.includes('ROLE_ADMIN')
+    })
+
     const user = ref<User | null>(null)
     const loading = ref(false)
 
@@ -98,13 +109,11 @@ export const useAuthStore = defineStore('auth', () => {
 
     return {
         token,
-        user,
-        loading,
+        roles,
         isAuthenticated,
+        isAdmin,
+
         login,
-        register,
-        fetchCurrentUser,
-        bootstrap,
         logout,
     }
 })
