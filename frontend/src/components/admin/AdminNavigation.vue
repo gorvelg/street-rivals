@@ -36,9 +36,12 @@ import { RouterLink } from 'vue-router'
       Événements
     </span>
 
-    <span class="admin-navigation-link disabled">
+    <RouterLink
+        :to="{ name: 'admin-cards' }"
+        class="admin-navigation-link"
+    >
       Cartes
-    </span>
+    </RouterLink>
   </nav>
 </template>
 

@@ -429,3 +429,90 @@ export interface AdminDuelDetail {
     antiFarming: AdminJsonValue
     replayData: AdminJsonValue
 }
+export interface AdminCard {
+    id: number
+    code: string
+    name: string
+    type: string
+    rarity: string
+
+    effectConfig: Record<string, unknown>
+
+    carCount: number
+
+    tier1Count: number
+    tier2Count: number
+    tier3Count: number
+
+    equippedCount: number
+
+    averageAcquiredLevel: number | null
+}
+
+export interface AdminCardsFilters {
+    search: string | null
+    type: string | null
+    rarity: string | null
+    tier: number | null
+    equippedOnly: boolean
+}
+
+export interface AdminCardsOptions {
+    types: string[]
+    rarities: string[]
+    tiers: number[]
+}
+
+export interface AdminCardsResponse {
+    members: AdminCard[]
+
+    pagination: AdminPagination
+    filters: AdminCardsFilters
+    options: AdminCardsOptions
+}
+
+export interface AdminCardDetailCar {
+    id: number
+    pilotName: string
+    color: string
+
+    level: number
+    rating: number
+
+    wins: number
+    losses: number
+}
+
+export interface AdminCardDetailOwner {
+    id: number | null
+    email: string | null
+    isActive: boolean
+}
+
+export interface AdminCardHolder {
+    id: number
+
+    tier: number
+    equipped: boolean
+    acquiredLevel: number
+
+    car: AdminCardDetailCar
+    owner: AdminCardDetailOwner
+}
+
+export interface AdminCardHoldersFilters {
+    search: string | null
+    tier: number | null
+    equippedOnly: boolean
+}
+
+export interface AdminCardHolders {
+    members: AdminCardHolder[]
+    pagination: AdminPagination
+    filters: AdminCardHoldersFilters
+}
+
+export interface AdminCardDetail {
+    card: AdminCard
+    holders: AdminCardHolders
+}
