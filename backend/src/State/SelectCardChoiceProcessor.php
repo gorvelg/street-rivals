@@ -10,10 +10,12 @@ use App\Dto\SelectCardChoiceInput;
 use App\Entity\CarCard;
 use App\Entity\CardChoice;
 use App\Entity\User;
+use App\Enum\GameEventType;
 use App\Repository\CarCardRepository;
 use App\Repository\CardChoiceRepository;
 use App\Repository\CardRepository;
 use App\Service\CarProgressionService;
+use App\Service\GameEventTracker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,6 +37,7 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
         private readonly CarCardRepository $carCardRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly CarProgressionService $carProgressionService,
+        private readonly GameEventTracker $eventTracker,
     ) {
     }
 
@@ -44,6 +47,9 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
         array $uriVariables = [],
         array $context = [],
     ): CardChoice {
+        /*
+         * Vérification des données reçues.
+         */
         if (
             !$data instanceof SelectCardChoiceInput
             || $data->cardId === null
@@ -53,6 +59,9 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
+        /*
+         * Vérification de l’identifiant du choix présent dans l’URL.
+         */
         $choiceId = filter_var(
             $uriVariables['id'] ?? null,
             FILTER_VALIDATE_INT
@@ -64,6 +73,9 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
+        /*
+         * Vérification de l’utilisateur connecté.
+         */
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
@@ -72,6 +84,9 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
+        /*
+         * Chargement du choix de cartes.
+         */
         $choice = $this->cardChoiceRepository->find($choiceId);
 
         if (!$choice instanceof CardChoice) {
@@ -88,18 +103,27 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
+        /*
+         * Le choix doit appartenir à une voiture du joueur connecté.
+         */
         if ($car->getUser()?->getId() !== $user->getId()) {
             throw new AccessDeniedHttpException(
                 'Ce choix ne vous appartient pas.'
             );
         }
 
+        /*
+         * Un choix déjà résolu ne peut pas être rejoué.
+         */
         if (!$choice->isPending()) {
             throw new ConflictHttpException(
                 'Une carte a déjà été sélectionnée.'
             );
         }
 
+        /*
+         * Chargement de la carte sélectionnée.
+         */
         $card = $this->cardRepository->find($data->cardId);
 
         if ($card === null) {
@@ -108,6 +132,10 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
+        /*
+         * La carte doit obligatoirement faire partie
+         * des deux propositions du choix.
+         */
         if (!$choice->containsCard($card)) {
             throw new HttpException(
                 Response::HTTP_UNPROCESSABLE_ENTITY,
@@ -115,10 +143,17 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             );
         }
 
+        /*
+         * Recherche d’une éventuelle acquisition existante.
+         */
         $existingCarCard = $this->carCardRepository->findOneBy([
             'car' => $car,
             'card' => $card,
         ]);
+
+        $previousTier = 0;
+        $newTier = 1;
+        $eventType = GameEventType::CARD_SELECTED;
 
         /*
          * La voiture possède déjà la carte :
@@ -131,7 +166,12 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
                 );
             }
 
+            $previousTier = $existingCarCard->getTier();
+
             $existingCarCard->upgrade();
+
+            $newTier = $existingCarCard->getTier();
+            $eventType = GameEventType::CARD_UPGRADED;
         } else {
             /*
              * Première acquisition :
@@ -149,19 +189,59 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
         }
 
         /*
-         * Le choix est désormais définitif.
+         * Le choix devient définitif.
          */
         $choice->selectCard($card);
 
         /*
-         * Si la voiture possède assez d’XP pour monter de nouveau,
-         * la progression se poursuit après la résolution du choix.
+         * Enregistrement de l’événement analytique.
+         *
+         * track() ne déclenche aucun flush.
+         * L’événement sera enregistré en même temps que le choix,
+         * la CarCard et l’éventuelle nouvelle montée de niveau.
          */
-        $this->carProgressionService->processNextLevelIfPossible(
-            $car,
-            $choice
+        $this->eventTracker->track(
+            type: $eventType,
+            user: $user,
+            car: $car,
+            payload: [
+                'cardChoiceId' => $choice->getId(),
+                'cardId' => $card->getId(),
+                'cardCode' => $card->getCode(),
+                'cardName' => $card->getName(),
+                'cardType' => $card->getType(),
+                'cardRarity' => $card->getRarity(),
+                'choiceLevel' => $choice->getLevel(),
+                'previousTier' => $previousTier,
+                'newTier' => $newTier,
+                'wasUpgrade' =>
+                    $eventType === GameEventType::CARD_UPGRADED,
+            ],
         );
 
+        /*
+         * Si la voiture possède encore assez d’XP pour monter,
+         * la progression reprend après la résolution du choix.
+         *
+         * Une nouvelle montée de niveau peut générer :
+         * - un nouvel événement level_up ;
+         * - un nouveau CardChoice.
+         */
+        $this->carProgressionService
+            ->processNextLevelIfPossible(
+                $car,
+                $choice
+            );
+
+        /*
+         * Enregistrement de l’ensemble :
+         *
+         * - choix sélectionné ;
+         * - nouvelle CarCard ou palier amélioré ;
+         * - événement card_selected ou card_upgraded ;
+         * - éventuelle montée de niveau ;
+         * - éventuel nouveau choix de cartes.
+         */
         $this->entityManager->flush();
 
         return $choice;

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Controller\Api;
 
 use App\Entity\User;
+use App\Enum\GameEventType;
 use App\Repository\UserRepository;
+use App\Service\GameEventTracker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -25,6 +27,7 @@ final class RegisterController extends AbstractController
         UserRepository $userRepository,
         UserPasswordHasherInterface $passwordHasher,
         EntityManagerInterface $entityManager,
+        GameEventTracker $eventTracker,
     ): JsonResponse {
         try {
             $data = $request->toArray();
@@ -52,19 +55,47 @@ final class RegisterController extends AbstractController
             ], 422);
         }
 
-        if ($userRepository->findOneBy(['email' => $email]) !== null) {
+        if ($userRepository->findOneBy([
+                'email' => $email,
+            ]) !== null) {
             return $this->json([
                 'error' => 'Cette adresse e-mail est déjà utilisée.',
             ], 409);
         }
 
         $user = new User();
+
         $user->setEmail($email);
+
         $user->setPassword(
-            $passwordHasher->hashPassword($user, $plainPassword)
+            $passwordHasher->hashPassword(
+                $user,
+                $plainPassword
+            )
         );
 
+        /*
+         * L'utilisateur est placé dans l'Unit of Work Doctrine.
+         */
         $entityManager->persist($user);
+
+        /*
+         * L'événement est également placé dans l'Unit of Work.
+         *
+         * Aucun flush n'est exécuté par track().
+         */
+        $eventTracker->track(
+            type: GameEventType::USER_REGISTERED,
+            user: $user,
+            payload: [
+                'source' => 'web',
+            ],
+        );
+
+        /*
+         * Doctrine enregistre l'utilisateur puis l'événement
+         * dans la même opération.
+         */
         $entityManager->flush();
 
         return $this->json([

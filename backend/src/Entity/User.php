@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Doctrine\DBAL\Types\Types;
 
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_EMAIL', fields: ['email'])]
@@ -22,9 +23,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?string $email = null;
 
     /**
-     * @var list<string> The user roles
+     * @var list<string>
      */
-    #[ORM\Column]
+    #[ORM\Column(type: Types::JSON)]
     private array $roles = [];
 
     /**
@@ -72,25 +73,96 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
     /**
-     * @see UserInterface
+     * @return list<string>
      */
     public function getRoles(): array
     {
         $roles = $this->roles;
-        // guarantee every user at least has ROLE_USER
+
+        /*
+         * Tous les comptes possèdent obligatoirement ROLE_USER.
+         */
         $roles[] = 'ROLE_USER';
 
-        return array_unique($roles);
+        return array_values(array_unique($roles));
     }
 
     /**
      * @param list<string> $roles
      */
-    public function setRoles(array $roles): static
+    public function setRoles(array $roles): self
     {
-        $this->roles = $roles;
+        $normalizedRoles = [];
+
+        foreach ($roles as $role) {
+            $role = strtoupper(trim($role));
+
+            if ($role === '') {
+                continue;
+            }
+
+            if (!str_starts_with($role, 'ROLE_')) {
+                $role = 'ROLE_' . $role;
+            }
+
+            $normalizedRoles[] = $role;
+        }
+
+        $this->roles = array_values(
+            array_unique($normalizedRoles)
+        );
 
         return $this;
+    }
+
+    public function addRole(string $role): self
+    {
+        $role = strtoupper(trim($role));
+
+        if ($role === '') {
+            throw new \InvalidArgumentException(
+                'Le rôle ne peut pas être vide.'
+            );
+        }
+
+        if (!str_starts_with($role, 'ROLE_')) {
+            $role = 'ROLE_' . $role;
+        }
+
+        if (!in_array($role, $this->roles, true)) {
+            $this->roles[] = $role;
+        }
+
+        return $this;
+    }
+
+    public function removeRole(string $role): self
+    {
+        $role = strtoupper(trim($role));
+
+        if (!str_starts_with($role, 'ROLE_')) {
+            $role = 'ROLE_' . $role;
+        }
+
+        $this->roles = array_values(
+            array_filter(
+                $this->roles,
+                static fn (
+                    string $existingRole
+                ): bool => $existingRole !== $role
+            )
+        );
+
+        return $this;
+    }
+
+    public function isAdmin(): bool
+    {
+        return in_array(
+            'ROLE_ADMIN',
+            $this->getRoles(),
+            true
+        );
     }
 
     /**
