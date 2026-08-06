@@ -1,61 +1,58 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Repository;
 
 use App\Entity\Car;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
-use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
-use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
-use Symfony\Component\Security\Core\User\PasswordUpgraderInterface;
 
 /**
  * @extends ServiceEntityRepository<User>
  */
-class UserRepository extends ServiceEntityRepository implements PasswordUpgraderInterface
+final class UserRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+    ) {
         parent::__construct($registry, User::class);
     }
 
     /**
-     * Used to upgrade (rehash) the user's password automatically over time.
+     * @return list<array{
+     *     id: int,
+     *     email: string,
+     *     roles: list<string>,
+     *     isActive: bool,
+     *     carCount: int
+     * }>
      */
-    public function upgradePassword(PasswordAuthenticatedUserInterface $user, string $newHashedPassword): void
-    {
-        if (!$user instanceof User) {
-            throw new UnsupportedUserException(sprintf('Instances of "%s" are not supported.', $user::class));
-        }
-
-        $user->setPassword($newHashedPassword);
-        $this->getEntityManager()->persist($user);
-        $this->getEntityManager()->flush();
-    }
-
     public function findAdminPage(
         ?string $search,
         int $page,
         int $itemsPerPage,
     ): array {
-        $queryBuilder = $this->createQueryBuilder('user')
+        $queryBuilder = $this->createQueryBuilder('u')
             ->select([
-                'user.id AS id',
-                'user.email AS email',
-                'user.roles AS roles',
+                'u.id AS id',
+                'u.email AS email',
+                'u.roles AS roles',
+                'u.isActive AS isActive',
                 'COUNT(car.id) AS carCount',
             ])
             ->leftJoin(
                 Car::class,
                 'car',
                 'WITH',
-                'car.user = user'
+                'car.user = u'
             )
-            ->groupBy('user.id')
-            ->addGroupBy('user.email')
-            ->addGroupBy('user.roles')
-            ->orderBy('user.id', 'DESC')
+            ->groupBy('u.id')
+            ->addGroupBy('u.email')
+            ->addGroupBy('u.roles')
+            ->addGroupBy('u.isActive')
+            ->orderBy('u.id', 'DESC')
             ->setFirstResult(
                 ($page - 1) * $itemsPerPage
             )
@@ -64,7 +61,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
         if ($search !== null && $search !== '') {
             $queryBuilder
                 ->andWhere(
-                    'LOWER(user.email) LIKE :search'
+                    'LOWER(u.email) LIKE :search'
                 )
                 ->setParameter(
                     'search',
@@ -72,6 +69,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
                 );
         }
 
+        /** @var list<array<string, mixed>> $results */
         $results = $queryBuilder
             ->getQuery()
             ->getArrayResult();
@@ -80,23 +78,51 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             static function (array $result): array {
                 $roles = $result['roles'] ?? [];
 
+                /*
+                 * Selon la configuration Doctrine/MariaDB,
+                 * le champ JSON peut éventuellement revenir
+                 * sous forme de chaîne.
+                 */
+                if (is_string($roles)) {
+                    $decodedRoles = json_decode(
+                        $roles,
+                        true
+                    );
+
+                    $roles = is_array($decodedRoles)
+                        ? $decodedRoles
+                        : [];
+                }
+
                 if (!is_array($roles)) {
                     $roles = [];
                 }
 
+                $normalizedRoles = [];
+
+                foreach ($roles as $role) {
+                    if (!is_string($role)) {
+                        continue;
+                    }
+
+                    $normalizedRoles[] = $role;
+                }
+
                 /*
-                 * ROLE_USER est ajouté automatiquement par
-                 * User::getRoles(), mais il n’est pas forcément
-                 * stocké dans la colonne JSON.
+                 * ROLE_USER est ajouté automatiquement
+                 * par User::getRoles(), mais n’est pas
+                 * forcément stocké dans la base.
                  */
-                $roles[] = 'ROLE_USER';
+                $normalizedRoles[] = 'ROLE_USER';
 
                 return [
                     'id' => (int) $result['id'],
                     'email' => (string) $result['email'],
                     'roles' => array_values(
-                        array_unique($roles)
+                        array_unique($normalizedRoles)
                     ),
+                    'isActive' =>
+                        (bool) $result['isActive'],
                     'carCount' =>
                         (int) $result['carCount'],
                 ];
@@ -108,13 +134,13 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     public function countForAdminSearch(
         ?string $search,
     ): int {
-        $queryBuilder = $this->createQueryBuilder('user')
-            ->select('COUNT(user.id)');
+        $queryBuilder = $this->createQueryBuilder('u')
+            ->select('COUNT(u.id)');
 
         if ($search !== null && $search !== '') {
             $queryBuilder
                 ->andWhere(
-                    'LOWER(user.email) LIKE :search'
+                    'LOWER(u.email) LIKE :search'
                 )
                 ->setParameter(
                     'search',
@@ -126,30 +152,4 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             ->getQuery()
             ->getSingleScalarResult();
     }
-
-
-    //    /**
-    //     * @return User[] Returns an array of User objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('u')
-    //            ->andWhere('u.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('u.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?User
-    //    {
-    //        return $this->createQueryBuilder('u')
-    //            ->andWhere('u.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
 }

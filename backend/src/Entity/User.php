@@ -40,6 +40,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: Car::class, mappedBy: 'user')]
     private Collection $cars;
 
+    #[ORM\Column(options: ['default' => true])]
+    private bool $isActive = true;
+
     public function __construct()
     {
         $this->cars = new ArrayCollection();
@@ -223,6 +226,32 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
                 $car->setUser(null);
             }
         }
+
+        return $this;
+    }
+
+    public function isActive(): bool
+    {
+        return $this->isActive;
+    }
+
+    public function setIsActive(bool $isActive): self
+    {
+        $this->isActive = $isActive;
+
+        return $this;
+    }
+
+    public function activate(): self
+    {
+        $this->isActive = true;
+
+        return $this;
+    }
+
+    public function deactivate(): self
+    {
+        $this->isActive = false;
 
         return $this;
     }

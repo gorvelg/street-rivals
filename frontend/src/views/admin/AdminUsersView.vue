@@ -4,6 +4,8 @@ import AdminNavigation
   from '../../components/admin/AdminNavigation.vue'
 import { useAdminUsersStore }
   from '../../stores/adminUsers'
+import type { AdminUser }
+  from '../../types/admin'
 
 const usersStore = useAdminUsersStore()
 
@@ -14,6 +16,34 @@ function isAdmin(roles: string[]): boolean {
 onMounted(async (): Promise<void> => {
   await usersStore.loadUsers()
 })
+
+async function toggleUserStatus(
+    user: AdminUser,
+): Promise<void> {
+  const action = user.isActive
+      ? 'désactiver'
+      : 'réactiver'
+
+  const confirmed = window.confirm(
+      `Confirmer l’action suivante : ${action} le compte ${user.email} ?`,
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    await usersStore.updateUserStatus(
+        user,
+        !user.isActive,
+    )
+  } catch {
+    /*
+     * Le message est déjà géré par le store.
+     */
+  }
+}
+
 </script>
 
 <template>
@@ -140,18 +170,23 @@ onMounted(async (): Promise<void> => {
       <div v-else class="table-container">
         <table class="users-table">
           <thead>
-          <tr>
-            <th>ID</th>
-            <th>Adresse e-mail</th>
-            <th>Type de compte</th>
-            <th>Voitures</th>
-          </tr>
+            <tr>
+              <th>ID</th>
+              <th>Adresse e-mail</th>
+              <th>Type de compte</th>
+              <th>Statut</th>
+              <th>Voitures</th>
+              <th>Actions</th>
+            </tr>
           </thead>
 
           <tbody>
           <tr
               v-for="user in usersStore.users"
               :key="user.id"
+              :class="{
+    'user-disabled-row': !user.isActive,
+  }"
           >
             <td class="identifier-cell">
               #{{ user.id }}
@@ -162,23 +197,70 @@ onMounted(async (): Promise<void> => {
             </td>
 
             <td>
-                <span
-                    v-if="isAdmin(user.roles)"
-                    class="role-badge role-admin"
-                >
-                  Administrateur
-                </span>
+    <span
+        v-if="isAdmin(user.roles)"
+        class="role-badge role-admin"
+    >
+      Administrateur
+    </span>
 
               <span
                   v-else
                   class="role-badge"
               >
-                  Joueur
-                </span>
+      Joueur
+    </span>
+            </td>
+
+            <td>
+    <span
+        class="status-badge"
+        :class="{
+        'status-active': user.isActive,
+        'status-disabled': !user.isActive,
+      }"
+    >
+      {{
+        user.isActive
+            ? 'Actif'
+            : 'Désactivé'
+      }}
+    </span>
             </td>
 
             <td>
               {{ user.carCount }}
+            </td>
+
+            <td>
+              <button
+                  type="button"
+                  class="status-button"
+                  :class="{
+        'status-button-danger': user.isActive,
+        'status-button-success': !user.isActive,
+      }"
+                  :disabled="
+        usersStore.updatingUserId === user.id
+      "
+                  @click="toggleUserStatus(user)"
+              >
+                <template
+                    v-if="
+          usersStore.updatingUserId === user.id
+        "
+                >
+                  Modification…
+                </template>
+
+                <template v-else>
+                  {{
+                    user.isActive
+                        ? 'Désactiver'
+                        : 'Réactiver'
+                  }}
+                </template>
+              </button>
             </td>
           </tr>
           </tbody>
@@ -422,5 +504,53 @@ onMounted(async (): Promise<void> => {
   .section-summary p + p {
     margin-top: 5px;
   }
+}
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.status-active {
+  background: rgba(40, 160, 90, 0.16);
+}
+
+.status-disabled {
+  background: rgba(190, 50, 50, 0.16);
+}
+
+.status-button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 8px;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status-button-danger {
+  border-color: rgba(190, 50, 50, 0.4);
+  background: rgba(190, 50, 50, 0.1);
+}
+
+.status-button-success {
+  border-color: rgba(40, 160, 90, 0.4);
+  background: rgba(40, 160, 90, 0.1);
+}
+
+.status-button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.user-disabled-row {
+  opacity: 0.58;
 }
 </style>

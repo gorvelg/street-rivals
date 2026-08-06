@@ -29,3 +29,35 @@ export interface AdminDashboard {
     duels: AdminDashboardDuels
     progression: AdminDashboardProgression
 }
+
+export interface AdminUser {
+    id: number
+    email: string
+    roles: string[]
+    isActive: boolean
+    carCount: number
+}
+
+export interface AdminPagination {
+    page: number
+    itemsPerPage: number
+    totalItems: number
+    totalPages: number
+}
+
+export interface AdminUsersFilters {
+    search: string | null
+}
+
+export interface AdminUsersResponse {
+    members: AdminUser[]
+    pagination: AdminPagination
+    filters: AdminUsersFilters
+}
+
+export interface AdminUserStatusResponse {
+    id: number
+    email: string
+    roles: string[]
+    isActive: boolean
+}
