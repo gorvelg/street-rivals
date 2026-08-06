@@ -302,3 +302,50 @@ export interface AdminCarCooldownResetResponse {
     cooldownSeconds: number
     resetAt: string
 }
+export interface AdminDuelCar {
+    id: number
+    pilotName: string
+    color: string
+    ownerId: number | null
+    ownerEmail: string | null
+}
+
+export type AdminDuelWinnerSide =
+    | 'attacker'
+    | 'defender'
+
+export interface AdminDuel {
+    id: number
+
+    attacker: AdminDuelCar
+    defender: AdminDuelCar
+
+    winnerCarId: number
+    winnerSide: AdminDuelWinnerSide
+
+    finalGap: number
+    engineVersion: string
+
+    attackerXpReward: number
+    attackerMoneyReward: number
+
+    defenderXpReward: number
+    defenderMoneyReward: number
+
+    attackerRatingDelta: number
+    defenderRatingDelta: number
+
+    createdAt: string
+}
+
+export interface AdminDuelsFilters {
+    search: string | null
+    winnerSide: AdminDuelWinnerSide | null
+    engineVersion: string | null
+}
+
+export interface AdminDuelsResponse {
+    members: AdminDuel[]
+    pagination: AdminPagination
+    filters: AdminDuelsFilters
+}
