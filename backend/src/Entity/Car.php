@@ -322,4 +322,16 @@ class Car
 
         $this->touch();
     }
+
+    public function addMoney(int $amount): void
+    {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException(
+                'Le montant d’argent doit être supérieur à zéro.'
+            );
+        }
+
+        $this->money += $amount;
+        $this->touch();
+    }
 }

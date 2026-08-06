@@ -117,6 +117,21 @@ class Duel
     #[ORM\Column(name: 'created_at')]
     #[Groups(['duel:read'])]
     private \DateTimeImmutable $createdAt;
+    #[ORM\Column(name: 'attacker_xp_reward')]
+    #[Groups(['duel:read'])]
+    private int $attackerXpReward;
+
+    #[ORM\Column(name: 'attacker_money_reward')]
+    #[Groups(['duel:read'])]
+    private int $attackerMoneyReward;
+
+    #[ORM\Column(name: 'defender_xp_reward')]
+    #[Groups(['duel:read'])]
+    private int $defenderXpReward;
+
+    #[ORM\Column(name: 'defender_money_reward')]
+    #[Groups(['duel:read'])]
+    private int $defenderMoneyReward;
 
     /**
      * @param array<string, mixed> $attackerSnapshot
@@ -133,6 +148,10 @@ class Duel
         array $attackerSnapshot,
         array $defenderSnapshot,
         array $replayData,
+        int $attackerXpReward,
+        int $attackerMoneyReward,
+        int $defenderXpReward,
+        int $defenderMoneyReward,
     ) {
         $this->attackerCar = $attackerCar;
         $this->defenderCar = $defenderCar;
@@ -143,6 +162,12 @@ class Duel
         $this->attackerSnapshot = $attackerSnapshot;
         $this->defenderSnapshot = $defenderSnapshot;
         $this->replayData = $replayData;
+
+        $this->attackerXpReward = $attackerXpReward;
+        $this->attackerMoneyReward = $attackerMoneyReward;
+        $this->defenderXpReward = $defenderXpReward;
+        $this->defenderMoneyReward = $defenderMoneyReward;
+
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -208,5 +233,25 @@ class Duel
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getAttackerXpReward(): int
+    {
+        return $this->attackerXpReward;
+    }
+
+    public function getAttackerMoneyReward(): int
+    {
+        return $this->attackerMoneyReward;
+    }
+
+    public function getDefenderXpReward(): int
+    {
+        return $this->defenderXpReward;
+    }
+
+    public function getDefenderMoneyReward(): int
+    {
+        return $this->defenderMoneyReward;
     }
 }
