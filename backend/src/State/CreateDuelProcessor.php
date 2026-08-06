@@ -9,8 +9,10 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Dto\CreateDuelInput;
 use App\Entity\Duel;
 use App\Entity\User;
+use App\Exception\DuelLimitException;
 use App\Repository\CarRepository;
 use App\Service\CarProgressionService;
+use App\Service\DuelPolicyService;
 use App\Service\DuelRewardCalculator;
 use App\Service\DuelSimulator;
 use App\Service\RatingCalculator;
@@ -30,6 +32,7 @@ final class CreateDuelProcessor implements ProcessorInterface
     public function __construct(
         private readonly Security $security,
         private readonly CarRepository $carRepository,
+        private readonly DuelPolicyService $duelPolicyService,
         private readonly DuelSimulator $duelSimulator,
         private readonly DuelRewardCalculator $rewardCalculator,
         private readonly RatingCalculator $ratingCalculator,
@@ -44,9 +47,6 @@ final class CreateDuelProcessor implements ProcessorInterface
         array $uriVariables = [],
         array $context = [],
     ): Duel {
-        /*
-         * Vérification du DTO reçu.
-         */
         if (
             !$data instanceof CreateDuelInput
             || $data->attackerCarId === null
@@ -57,9 +57,6 @@ final class CreateDuelProcessor implements ProcessorInterface
             );
         }
 
-        /*
-         * Vérification de l’utilisateur connecté.
-         */
         $user = $this->security->getUser();
 
         if (!$user instanceof User) {
@@ -68,9 +65,6 @@ final class CreateDuelProcessor implements ProcessorInterface
             );
         }
 
-        /*
-         * Chargement de la voiture attaquante.
-         */
         $attacker = $this->carRepository->find(
             $data->attackerCarId
         );
@@ -81,9 +75,6 @@ final class CreateDuelProcessor implements ProcessorInterface
             );
         }
 
-        /*
-         * Chargement de la voiture défensive.
-         */
         $defender = $this->carRepository->find(
             $data->defenderCarId
         );
@@ -94,19 +85,12 @@ final class CreateDuelProcessor implements ProcessorInterface
             );
         }
 
-        /*
-         * Le joueur connecté doit obligatoirement posséder
-         * la voiture attaquante.
-         */
         if ($attacker->getUser()?->getId() !== $user->getId()) {
             throw new AccessDeniedHttpException(
                 'La voiture attaquante ne vous appartient pas.'
             );
         }
 
-        /*
-         * Une voiture ne peut pas se battre contre elle-même.
-         */
         if ($attacker->getId() === $defender->getId()) {
             throw new HttpException(
                 Response::HTTP_UNPROCESSABLE_ENTITY,
@@ -114,10 +98,6 @@ final class CreateDuelProcessor implements ProcessorInterface
             );
         }
 
-        /*
-         * Les duels classés entre deux voitures appartenant
-         * au même compte sont interdits.
-         */
         if ($defender->getUser()?->getId() === $user->getId()) {
             throw new HttpException(
                 Response::HTTP_UNPROCESSABLE_ENTITY,
@@ -126,10 +106,26 @@ final class CreateDuelProcessor implements ProcessorInterface
         }
 
         /*
-         * Simulation du duel.
-         *
-         * Cette étape ne modifie pas la base de données.
+         * Vérification des limites et calcul des multiplicateurs.
          */
+        try {
+            $policyResult = $this->duelPolicyService
+                ->assertCanStart(
+                    attacker: $attacker,
+                    defender: $defender,
+                );
+        } catch (DuelLimitException $exception) {
+            throw new HttpException(
+                Response::HTTP_TOO_MANY_REQUESTS,
+                $exception->getMessage(),
+                $exception,
+                [
+                    'Retry-After' => (string)
+                    $exception->retryAfterSeconds,
+                ]
+            );
+        }
+
         try {
             $simulation = $this->duelSimulator->simulate(
                 attacker: $attacker,
@@ -143,37 +139,20 @@ final class CreateDuelProcessor implements ProcessorInterface
             );
         }
 
-        /*
-         * Calcul des récompenses en fonction du gagnant.
-         */
         $rewards = $this->rewardCalculator->calculate(
             attacker: $attacker,
             defender: $defender,
             winner: $simulation->winnerCar,
+            multiplier: $policyResult->rewardMultiplier,
         );
 
-        /*
-         * Calcul des variations Elo avant de modifier
-         * les classements des voitures.
-         */
         $ratingResult = $this->ratingCalculator->calculate(
             attacker: $attacker,
             defender: $defender,
             winner: $simulation->winnerCar,
+            multiplier: $policyResult->ratingMultiplier,
         );
 
-        /*
-         * Toutes les modifications sont enregistrées dans
-         * une seule transaction :
-         *
-         * - argent ;
-         * - XP ;
-         * - éventuelle montée de niveau ;
-         * - éventuel CardChoice ;
-         * - classement Elo ;
-         * - victoires et défaites ;
-         * - création du duel.
-         */
         return $this->entityManager->wrapInTransaction(
             function (
                 EntityManagerInterface $entityManager
@@ -182,11 +161,9 @@ final class CreateDuelProcessor implements ProcessorInterface
                 $defender,
                 $simulation,
                 $rewards,
-                $ratingResult
+                $ratingResult,
+                $policyResult
             ): Duel {
-                /*
-                 * Attribution de l’argent.
-                 */
                 $attacker->addMoney(
                     $rewards->attackerMoney
                 );
@@ -195,12 +172,6 @@ final class CreateDuelProcessor implements ProcessorInterface
                     $rewards->defenderMoney
                 );
 
-                /*
-                 * Attribution de l’XP.
-                 *
-                 * applyXp() ne doit pas ouvrir une nouvelle transaction
-                 * et ne doit pas exécuter de flush.
-                 */
                 $this->progressionService->applyXp(
                     car: $attacker,
                     amount: $rewards->attackerXp,
@@ -211,10 +182,6 @@ final class CreateDuelProcessor implements ProcessorInterface
                     amount: $rewards->defenderXp,
                 );
 
-                /*
-                 * Mise à jour du classement et des statistiques
-                 * de victoires/défaites.
-                 */
                 $attackerWon =
                     $simulation->winnerCar->getId()
                     === $attacker->getId();
@@ -237,12 +204,11 @@ final class CreateDuelProcessor implements ProcessorInterface
                     );
                 }
 
-                /*
-                 * Complément du replay avec les récompenses.
-                 */
                 $replayData = $simulation->replayData;
 
                 $replayData['rewards'] = [
+                    'multiplier' =>
+                        $policyResult->rewardMultiplier,
                     'attacker' => [
                         'xp' => $rewards->attackerXp,
                         'money' => $rewards->attackerMoney,
@@ -253,25 +219,45 @@ final class CreateDuelProcessor implements ProcessorInterface
                     ],
                 ];
 
-                /*
-                 * Complément du replay avec l’évolution Elo.
-                 */
                 $replayData['ranking'] = [
+                    'multiplier' =>
+                        $policyResult->ratingMultiplier,
                     'attacker' => [
-                        'before' => $ratingResult->attackerBefore,
-                        'after' => $ratingResult->attackerAfter,
-                        'delta' => $ratingResult->attackerDelta,
+                        'before' =>
+                            $ratingResult->attackerBefore,
+                        'after' =>
+                            $ratingResult->attackerAfter,
+                        'delta' =>
+                            $ratingResult->attackerDelta,
                     ],
                     'defender' => [
-                        'before' => $ratingResult->defenderBefore,
-                        'after' => $ratingResult->defenderAfter,
-                        'delta' => $ratingResult->defenderDelta,
+                        'before' =>
+                            $ratingResult->defenderBefore,
+                        'after' =>
+                            $ratingResult->defenderAfter,
+                        'delta' =>
+                            $ratingResult->defenderDelta,
                     ],
                 ];
 
-                /*
-                 * Création du duel enregistré en base.
-                 */
+                $replayData['antiFarming'] = [
+                    'dailyDuelNumber' =>
+                        $policyResult->dailyDuelNumber,
+                    'pairDuelNumber' =>
+                        $policyResult->pairDuelNumber,
+                    'rewardMultiplier' =>
+                        $policyResult->rewardMultiplier,
+                    'ratingMultiplier' =>
+                        $policyResult->ratingMultiplier,
+                    'dailyLimit' =>
+                        DuelPolicyService::MAX_DAILY_DUELS,
+                    'pairDailyLimit' =>
+                        DuelPolicyService::MAX_DAILY_PAIR_DUELS,
+                    'cooldownSeconds' =>
+                        DuelPolicyService::PAIR_COOLDOWN_SECONDS,
+                    'dayTimezone' => 'UTC',
+                ];
+
                 $duel = new Duel(
                     attackerCar: $attacker,
                     defenderCar: $defender,
@@ -311,10 +297,6 @@ final class CreateDuelProcessor implements ProcessorInterface
 
                 $entityManager->persist($duel);
 
-                /*
-                 * Aucun flush manuel :
-                 * wrapInTransaction() exécutera le flush puis le commit.
-                 */
                 return $duel;
             }
         );

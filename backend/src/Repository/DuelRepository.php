@@ -2,6 +2,7 @@
 
 namespace App\Repository;
 
+use App\Entity\Car;
 use App\Entity\Duel;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -16,28 +17,63 @@ class DuelRepository extends ServiceEntityRepository
         parent::__construct($registry, Duel::class);
     }
 
-    //    /**
-    //     * @return Duel[] Returns an array of Duel objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('d')
-    //            ->andWhere('d.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('d.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
+    public function countInitiatedByCarSince(
+        Car $attacker,
+        \DateTimeImmutable $since,
+    ): int {
+        return (int) $this->createQueryBuilder('duel')
+            ->select('COUNT(duel.id)')
+            ->andWhere('duel.attackerCar = :attacker')
+            ->andWhere('duel.createdAt >= :since')
+            ->setParameter('attacker', $attacker)
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
 
-    //    public function findOneBySomeField($value): ?Duel
-    //    {
-    //        return $this->createQueryBuilder('d')
-    //            ->andWhere('d.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    public function countBetweenCarsSince(
+        Car $firstCar,
+        Car $secondCar,
+        \DateTimeImmutable $since,
+    ): int {
+        return (int) $this->createQueryBuilder('duel')
+            ->select('COUNT(duel.id)')
+            ->andWhere(
+                '(
+                duel.attackerCar = :firstCar
+                AND duel.defenderCar = :secondCar
+            ) OR (
+                duel.attackerCar = :secondCar
+                AND duel.defenderCar = :firstCar
+            )'
+            )
+            ->andWhere('duel.createdAt >= :since')
+            ->setParameter('firstCar', $firstCar)
+            ->setParameter('secondCar', $secondCar)
+            ->setParameter('since', $since)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    public function findLatestBetweenCars(
+        Car $firstCar,
+        Car $secondCar,
+    ): ?Duel {
+        return $this->createQueryBuilder('duel')
+            ->andWhere(
+                '(
+                duel.attackerCar = :firstCar
+                AND duel.defenderCar = :secondCar
+            ) OR (
+                duel.attackerCar = :secondCar
+                AND duel.defenderCar = :firstCar
+            )'
+            )
+            ->setParameter('firstCar', $firstCar)
+            ->setParameter('secondCar', $secondCar)
+            ->orderBy('duel.createdAt', 'DESC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

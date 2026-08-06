@@ -9,21 +9,21 @@ use App\Model\DuelRatingResult;
 
 final class RatingCalculator
 {
-    /**
-     * Facteur de variation Elo.
-     */
     private const K_FACTOR = 32;
-
-    /**
-     * Écart de référence utilisé par la formule Elo.
-     */
     private const RATING_SCALE = 400;
 
     public function calculate(
         Car $attacker,
         Car $defender,
         Car $winner,
+        float $multiplier = 1.0,
     ): DuelRatingResult {
+        if ($multiplier < 0 || $multiplier > 1) {
+            throw new \InvalidArgumentException(
+                'Le multiplicateur Elo doit être compris entre zéro et un.'
+            );
+        }
+
         $attackerId = $attacker->getId();
         $defenderId = $defender->getId();
         $winnerId = $winner->getId();
@@ -59,33 +59,46 @@ final class RatingCalculator
 
         $attackerWon = $winnerId === $attackerId;
 
-        if ($attackerWon) {
-            $attackerDelta = max(
+        $baseAttackerDelta = $attackerWon
+            ? max(
                 1,
                 (int) round(
-                    self::K_FACTOR * (1 - $expectedAttacker)
+                    self::K_FACTOR
+                    * (1 - $expectedAttacker)
+                )
+            )
+            : -max(
+                1,
+                (int) round(
+                    self::K_FACTOR
+                    * $expectedAttacker
                 )
             );
+
+        if ($multiplier === 0.0) {
+            $attackerDelta = 0;
         } else {
-            $attackerDelta = -max(
+            $scaledAbsoluteDelta = max(
                 1,
                 (int) round(
-                    self::K_FACTOR * $expectedAttacker
+                    abs($baseAttackerDelta) * $multiplier
                 )
             );
+
+            $attackerDelta = $baseAttackerDelta > 0
+                ? $scaledAbsoluteDelta
+                : -$scaledAbsoluteDelta;
         }
 
-        /*
-         * Le système reste à somme nulle :
-         * les points gagnés par l’un sont perdus par l’autre.
-         */
         $defenderDelta = -$attackerDelta;
 
         return new DuelRatingResult(
             attackerBefore: $attackerBefore,
             defenderBefore: $defenderBefore,
-            attackerAfter: $attackerBefore + $attackerDelta,
-            defenderAfter: $defenderBefore + $defenderDelta,
+            attackerAfter:
+            $attackerBefore + $attackerDelta,
+            defenderAfter:
+            $defenderBefore + $defenderDelta,
             attackerDelta: $attackerDelta,
             defenderDelta: $defenderDelta,
         );

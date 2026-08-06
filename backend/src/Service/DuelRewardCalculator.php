@@ -19,7 +19,14 @@ final class DuelRewardCalculator
         Car $attacker,
         Car $defender,
         Car $winner,
+        float $multiplier = 1.0,
     ): DuelRewards {
+        if ($multiplier <= 0 || $multiplier > 1) {
+            throw new \InvalidArgumentException(
+                'Le multiplicateur de récompense doit être supérieur à zéro et inférieur ou égal à un.'
+            );
+        }
+
         if (
             $winner->getId() !== $attacker->getId()
             && $winner->getId() !== $defender->getId()
@@ -29,24 +36,52 @@ final class DuelRewardCalculator
             );
         }
 
-        $attackerWon = $winner->getId() === $attacker->getId();
+        $attackerWon =
+            $winner->getId() === $attacker->getId();
+
+        $attackerBaseXp = $attackerWon
+            ? self::WINNER_XP
+            : self::LOSER_XP;
+
+        $attackerBaseMoney = $attackerWon
+            ? self::WINNER_MONEY
+            : self::LOSER_MONEY;
+
+        $defenderBaseXp = $attackerWon
+            ? self::LOSER_XP
+            : self::WINNER_XP;
+
+        $defenderBaseMoney = $attackerWon
+            ? self::LOSER_MONEY
+            : self::WINNER_MONEY;
 
         return new DuelRewards(
-            attackerXp: $attackerWon
-                ? self::WINNER_XP
-                : self::LOSER_XP,
+            attackerXp: $this->applyMultiplier(
+                $attackerBaseXp,
+                $multiplier
+            ),
+            attackerMoney: $this->applyMultiplier(
+                $attackerBaseMoney,
+                $multiplier
+            ),
+            defenderXp: $this->applyMultiplier(
+                $defenderBaseXp,
+                $multiplier
+            ),
+            defenderMoney: $this->applyMultiplier(
+                $defenderBaseMoney,
+                $multiplier
+            ),
+        );
+    }
 
-            attackerMoney: $attackerWon
-                ? self::WINNER_MONEY
-                : self::LOSER_MONEY,
-
-            defenderXp: $attackerWon
-                ? self::LOSER_XP
-                : self::WINNER_XP,
-
-            defenderMoney: $attackerWon
-                ? self::LOSER_MONEY
-                : self::WINNER_MONEY,
+    private function applyMultiplier(
+        int $value,
+        float $multiplier,
+    ): int {
+        return max(
+            1,
+            (int) round($value * $multiplier)
         );
     }
 }

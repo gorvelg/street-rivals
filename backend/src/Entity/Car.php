@@ -295,6 +295,7 @@ class Car
     {
         $this->updatedAt = new \DateTimeImmutable();
     }
+
     #[Groups(['car:read'])]
     public function getXpRequiredForNextLevel(): int
     {
@@ -400,9 +401,9 @@ class Car
 
     public function recordWin(int $ratingDelta): void
     {
-        if ($ratingDelta <= 0) {
+        if ($ratingDelta < 0) {
             throw new \InvalidArgumentException(
-                'Le gain de classement doit être positif.'
+                'Le gain de classement ne peut pas être négatif.'
             );
         }
 
@@ -414,9 +415,9 @@ class Car
 
     public function recordLoss(int $ratingDelta): void
     {
-        if ($ratingDelta >= 0) {
+        if ($ratingDelta > 0) {
             throw new \InvalidArgumentException(
-                'La perte de classement doit être négative.'
+                'La perte de classement ne peut pas être positive.'
             );
         }
 
