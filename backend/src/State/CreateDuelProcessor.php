@@ -345,13 +345,16 @@ final class CreateDuelProcessor implements ProcessorInterface
                         $policyResult->ratingMultiplier,
 
                     'dailyLimit' =>
-                        DuelPolicyService::MAX_DAILY_DUELS,
+                        $this->duelPolicyService
+                            ->getDailyAttackLimit(),
 
                     'pairDailyLimit' =>
-                        DuelPolicyService::MAX_DAILY_PAIR_DUELS,
+                        $this->duelPolicyService
+                            ->getPairDailyLimit(),
 
                     'cooldownSeconds' =>
-                        DuelPolicyService::PAIR_COOLDOWN_SECONDS,
+                        $this->duelPolicyService
+                            ->getPairCooldownSeconds(),
 
                     'dayTimezone' => 'UTC',
                 ];
