@@ -106,6 +106,10 @@ class Card
             'default' => 'ability',
         ],
     )]
+    #[Groups([
+        'card:read',
+        'card-choice:read',
+    ])]
     private CardKind $kind = CardKind::ABILITY;
 
     #[ORM\Column(
@@ -113,6 +117,10 @@ class Card
         nullable: true,
         enumType: EquipmentSlot::class,
     )]
+    #[Groups([
+        'card:read',
+        'card-choice:read',
+    ])]
     private ?EquipmentSlot $equipmentSlot = null;
 
     #[ORM\Column(
@@ -120,6 +128,10 @@ class Card
             'default' => 3,
         ],
     )]
+    #[Groups([
+        'card:read',
+        'card-choice:read',
+    ])]
     private int $maxTier = 3;
 
     #[ORM\Column]
