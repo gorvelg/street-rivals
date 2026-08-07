@@ -11,10 +11,6 @@ import {
 } from './coupe01'
 
 import {
-    coupe02,
-} from './coupe02'
-
-import {
     muscle01,
 } from './muscle01'
 
@@ -31,12 +27,12 @@ import {
 } from './rally01'
 
 import {
-    retro01,
-} from './retro01'
-
-import {
     super01,
 } from './super01'
+
+import {
+    pickup01,
+} from './pickup01'
 
 import type {
     CarBodyStyle,
@@ -60,9 +56,6 @@ export const CAR_BODY_DEFINITIONS:
     [coupe01.code]:
     coupe01,
 
-    [coupe02.code]:
-    coupe02,
-
     [muscle01.code]:
     muscle01,
 
@@ -75,11 +68,12 @@ export const CAR_BODY_DEFINITIONS:
     [rally01.code]:
     rally01,
 
-    [retro01.code]:
-    retro01,
-
     [super01.code]:
     super01,
+
+    [pickup01.code]:
+    pickup01,
+
 }
 
 /*
