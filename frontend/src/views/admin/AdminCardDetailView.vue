@@ -237,14 +237,183 @@ onUnmounted((): void => {
         </article>
       </section>
 
-      <section class="admin-section">
-        <h2>Configuration de l’effet</h2>
+      <section class="admin-section edit-section">
+        <div class="section-heading">
+          <div>
+            <h2>Modifier la carte</h2>
 
-        <pre class="effect-config">{{
-            formatJson(
-                cardStore.detail.card.effectConfig,
-            )
-          }}</pre>
+            <p>
+              Le code interne reste volontairement
+              non modifiable.
+            </p>
+          </div>
+        </div>
+
+        <div
+            v-if="
+      cardStore.validationMessage !== null
+    "
+            class="edit-message edit-message-error"
+        >
+          {{ cardStore.validationMessage }}
+        </div>
+
+        <div
+            v-if="
+      cardStore.saveErrorMessage !== null
+    "
+            class="edit-message edit-message-error"
+        >
+          {{ cardStore.saveErrorMessage }}
+        </div>
+
+        <div
+            v-if="
+      cardStore.successMessage !== null
+    "
+            class="edit-message edit-message-success"
+        >
+          <strong>
+            {{ cardStore.successMessage }}
+          </strong>
+
+          <span
+              v-if="
+        cardStore.lastChangedFields.length > 0
+      "
+          >
+      Champs modifiés :
+      {{
+              cardStore.lastChangedFields.join(', ')
+            }}
+    </span>
+        </div>
+
+        <form
+            class="edit-form"
+            @submit.prevent="
+      cardStore.saveCard(
+        cardStore.detail.card.id,
+      )
+    "
+        >
+          <div class="edit-fields-grid">
+            <label class="edit-field">
+              <span>Code interne</span>
+
+              <input
+                  :value="cardStore.detail.card.code"
+                  type="text"
+                  readonly
+                  disabled
+              >
+
+              <small>
+                Le code est utilisé par le moteur et
+                les fixtures.
+              </small>
+            </label>
+
+            <label class="edit-field">
+              <span>Nom</span>
+
+              <input
+                  v-model="cardStore.editName"
+                  type="text"
+                  maxlength="120"
+                  autocomplete="off"
+                  :disabled="cardStore.isSaving"
+                  @input="cardStore.clearEditMessages"
+              >
+            </label>
+
+            <label class="edit-field">
+              <span>Type</span>
+
+              <input
+                  v-model="cardStore.editType"
+                  type="text"
+                  maxlength="60"
+                  autocomplete="off"
+                  :disabled="cardStore.isSaving"
+                  @input="cardStore.clearEditMessages"
+              >
+            </label>
+
+            <label class="edit-field">
+              <span>Rareté</span>
+
+              <input
+                  v-model="cardStore.editRarity"
+                  type="text"
+                  maxlength="60"
+                  autocomplete="off"
+                  :disabled="cardStore.isSaving"
+                  @input="cardStore.clearEditMessages"
+              >
+            </label>
+          </div>
+
+          <label class="edit-field effect-config-field">
+            <span>Configuration des effets</span>
+
+            <textarea
+                v-model="
+          cardStore.editEffectConfigText
+        "
+                rows="18"
+                spellcheck="false"
+                :disabled="cardStore.isSaving"
+                @input="cardStore.clearEditMessages"
+            />
+
+            <small>
+              Le contenu doit être un objet JSON
+              valide.
+            </small>
+          </label>
+
+          <details class="json-preview">
+            <summary>
+              Aperçu du JSON actuellement enregistré
+            </summary>
+
+            <pre>{{
+                formatJson(
+                    cardStore.detail.card.effectConfig,
+                )
+              }}</pre>
+          </details>
+
+          <footer class="edit-actions">
+            <button
+                type="button"
+                class="secondary-action"
+                :disabled="
+          cardStore.isSaving
+          || !cardStore.isDirty
+        "
+                @click="cardStore.resetEditForm"
+            >
+              Annuler les modifications
+            </button>
+
+            <button
+                type="submit"
+                class="save-action"
+                :disabled="
+          cardStore.isSaving
+          || !cardStore.isDirty
+        "
+            >
+              {{
+                cardStore.isSaving
+                    ? 'Enregistrement…'
+                    : 'Enregistrer la carte'
+              }}
+            </button>
+          </footer>
+        </form>
       </section>
 
       <section class="admin-section">
@@ -822,6 +991,17 @@ td a:hover {
 }
 
 @media (max-width: 600px) {
+  .edit-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-actions {
+    flex-direction: column-reverse;
+  }
+
+  .edit-actions button {
+    width: 100%;
+  }
   .admin-card-detail {
     width: min(100% - 20px, 1180px);
     padding-top: 20px;
@@ -841,5 +1021,152 @@ td a:hover {
   .filters {
     grid-template-columns: 1fr;
   }
+}
+.edit-section {
+  padding: 22px;
+  border: 1px solid rgba(127, 127, 127, 0.22);
+  border-radius: 15px;
+  background: rgba(127, 127, 127, 0.05);
+}
+
+.edit-form {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.edit-fields-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.edit-field {
+  display: grid;
+  gap: 7px;
+}
+
+.edit-field > span {
+  font-size: 0.8rem;
+  font-weight: 750;
+  opacity: 0.72;
+}
+
+.edit-field input,
+.edit-field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.edit-field input {
+  min-height: 42px;
+}
+
+.edit-field input:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.edit-field textarea {
+  min-height: 330px;
+  resize: vertical;
+  font-family:
+      "SFMono-Regular",
+      Consolas,
+      "Liberation Mono",
+      monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.edit-field small {
+  opacity: 0.62;
+}
+
+.effect-config-field {
+  margin-top: 2px;
+}
+
+.edit-message {
+  display: grid;
+  gap: 4px;
+  margin-top: 15px;
+  padding: 13px 14px;
+  border-radius: 9px;
+}
+
+.edit-message-error {
+  border: 1px solid rgba(190, 50, 50, 0.45);
+  background: rgba(190, 50, 50, 0.1);
+}
+
+.edit-message-success {
+  border: 1px solid rgba(40, 160, 90, 0.4);
+  background: rgba(40, 160, 90, 0.1);
+}
+
+.json-preview {
+  padding: 14px;
+  border: 1px solid rgba(127, 127, 127, 0.18);
+  border-radius: 10px;
+}
+
+.json-preview summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.json-preview pre {
+  max-height: 400px;
+  overflow: auto;
+  margin: 13px 0 0;
+  padding: 14px;
+  border-radius: 9px;
+  background: rgba(18, 18, 18, 0.92);
+  color: white;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.edit-actions button {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 9px;
+  color: inherit;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.edit-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.secondary-action {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.save-action {
+  border-color: rgba(40, 120, 210, 0.5)
+  !important;
+  background: rgba(40, 120, 210, 0.16);
 }
 </style>

@@ -516,3 +516,25 @@ export interface AdminCardDetail {
     card: AdminCard
     holders: AdminCardHolders
 }
+export interface AdminCardEditableData {
+    id: number
+    code: string
+    name: string
+    type: string
+    rarity: string
+    effectConfig: Record<string, unknown>
+}
+
+export interface AdminCardUpdateChange {
+    before: unknown
+    after: unknown
+}
+
+export interface AdminCardUpdateResponse {
+    updated: boolean
+    card: AdminCardEditableData
+    changes: Record<
+        string,
+        AdminCardUpdateChange
+    >
+}
