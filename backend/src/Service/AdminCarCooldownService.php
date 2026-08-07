@@ -16,6 +16,7 @@ final class AdminCarCooldownService
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly GameEventTracker $eventTracker,
+        private readonly DuelPolicyService $duelPolicyService,
     ) {
     }
 
@@ -39,7 +40,19 @@ final class AdminCarCooldownService
         );
 
         $cooldownSeconds =
-            DuelPolicyService::PAIR_COOLDOWN_SECONDS;
+            $this->duelPolicyService
+                ->getPairCooldownSeconds();
+
+        if ($cooldownSeconds <= 0) {
+            return [
+                'carId' => $car->getId(),
+                'updatedDuelCount' => 0,
+                'cooldownSeconds' => 0,
+                'resetAt' => $now->format(
+                    \DateTimeInterface::ATOM,
+                ),
+            ];
+        }
 
         $threshold = $now->modify(
             sprintf(

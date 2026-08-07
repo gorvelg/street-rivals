@@ -14,7 +14,6 @@ use App\Repository\CarCardRepository;
 use App\Repository\CardChoiceRepository;
 use App\Repository\DuelRepository;
 use App\Repository\GameEventRepository;
-use App\Service\DuelPolicyService;
 
 final class AdminCarDetailService
 {
@@ -24,6 +23,7 @@ final class AdminCarDetailService
         private readonly DuelRepository $duelRepository,
         private readonly GameEventRepository $gameEventRepository,
         private readonly CarStatsCalculator $carStatsCalculator,
+        private readonly DuelPolicyService $duelPolicyService,
     ) {
     }
 
@@ -52,14 +52,12 @@ final class AdminCarDetailService
                 limit: 20,
             );
 
-        /*
-         * Cette ligne repose sur le service déjà utilisé
-         * par ton endpoint /api/cars/{id}/stats.
-         */
         $calculatedStats = $this->carStatsCalculator
             ->calculate($car);
 
-        $cooldown = $this->buildCooldownStatus($car);
+        $cooldown = $this->buildCooldownStatus(
+            $car,
+        );
 
         return [
             'car' => [
@@ -79,29 +77,39 @@ final class AdminCarDetailService
             'owner' => [
                 'id' => $car->getUser()?->getId(),
                 'email' => $car->getUser()?->getEmail(),
+
                 'isActive' =>
-                    $car->getUser()?->isActive() ?? false,
+                    $car->getUser()?->isActive()
+                    ?? false,
             ],
 
             'baseStats' => [
                 'speed' => $car->getSpeed(),
-                'acceleration' => $car->getAcceleration(),
+
+                'acceleration' =>
+                    $car->getAcceleration(),
+
                 'grip' => $car->getGrip(),
-                'solidity' => $car->getSolidity(),
+
+                'solidity' =>
+                    $car->getSolidity(),
             ],
 
-            'calculatedStats' => $calculatedStats,
+            'calculatedStats' =>
+                $calculatedStats,
 
             'cards' => array_map(
                 fn (CarCard $carCard): array =>
-                $this->serializeCarCard($carCard),
-                $carCards
+                $this->serializeCarCard(
+                    $carCard,
+                ),
+                $carCards,
             ),
 
             'pendingCardChoice' =>
                 $pendingChoice instanceof CardChoice
                     ? $this->serializeCardChoice(
-                    $pendingChoice
+                    $pendingChoice,
                 )
                     : null,
 
@@ -111,14 +119,17 @@ final class AdminCarDetailService
                     duel: $duel,
                     car: $car,
                 ),
-                $recentDuels
+                $recentDuels,
             ),
 
             'recentEvents' => array_map(
                 fn (GameEvent $event): array =>
-                $this->serializeEvent($event),
-                $recentEvents
+                $this->serializeEvent(
+                    $event,
+                ),
+                $recentEvents,
             ),
+
             'cooldown' => $cooldown,
         ];
     }
@@ -134,7 +145,10 @@ final class AdminCarDetailService
         return [
             'id' => $carCard->getId(),
             'tier' => $carCard->getTier(),
-            'equipped' => $carCard->isEquipped(),
+
+            'equipped' =>
+                $carCard->isEquipped(),
+
             'acquiredLevel' =>
                 $carCard->getAcquiredLevel(),
 
@@ -144,8 +158,10 @@ final class AdminCarDetailService
                 'name' => $card?->getName(),
                 'type' => $card?->getType(),
                 'rarity' => $card?->getRarity(),
+
                 'effectConfig' =>
-                    $card?->getEffectConfig() ?? [],
+                    $card?->getEffectConfig()
+                    ?? [],
             ],
         ];
     }
@@ -161,11 +177,11 @@ final class AdminCarDetailService
             'level' => $choice->getLevel(),
 
             'firstCard' => $this->serializeCard(
-                $choice->getFirstCard()
+                $choice->getFirstCard(),
             ),
 
             'secondCard' => $this->serializeCard(
-                $choice->getSecondCard()
+                $choice->getSecondCard(),
             ),
         ];
     }
@@ -201,7 +217,8 @@ final class AdminCarDetailService
         $winner = $duel->getWinnerCar();
 
         $carWasAttacker =
-            $attacker->getId() === $car->getId();
+            $attacker->getId()
+            === $car->getId();
 
         $opponent = $carWasAttacker
             ? $defender
@@ -212,23 +229,29 @@ final class AdminCarDetailService
 
             'opponent' => [
                 'id' => $opponent->getId(),
+
                 'pilotName' =>
                     $opponent->getPilotName(),
+
                 'color' => $opponent->getColor(),
             ],
 
             'wasAttacker' => $carWasAttacker,
 
-            'winnerCarId' => $winner->getId(),
+            'winnerCarId' =>
+                $winner->getId(),
 
             'won' =>
-                $winner->getId() === $car->getId(),
+                $winner->getId()
+                === $car->getId(),
 
-            'finalGap' => $duel->getFinalGap(),
+            'finalGap' =>
+                $duel->getFinalGap(),
 
-            'createdAt' =>
-                $duel->getCreatedAt()->format(
-                    \DateTimeInterface::ATOM
+            'createdAt' => $duel
+                ->getCreatedAt()
+                ->format(
+                    \DateTimeInterface::ATOM,
                 ),
         ];
     }
@@ -241,16 +264,24 @@ final class AdminCarDetailService
     ): array {
         return [
             'id' => $event->getId(),
-            'type' => $event->getType()->value,
-            'duelId' => $event->getDuel()?->getId(),
-            'payload' => $event->getPayload(),
 
-            'occurredAt' =>
-                $event->getOccurredAt()->format(
-                    \DateTimeInterface::ATOM
+            'type' =>
+                $event->getType()->value,
+
+            'duelId' =>
+                $event->getDuel()?->getId(),
+
+            'payload' =>
+                $event->getPayload(),
+
+            'occurredAt' => $event
+                ->getOccurredAt()
+                ->format(
+                    \DateTimeInterface::ATOM,
                 ),
         ];
     }
+
     /**
      * @return array{
      *     active: bool,
@@ -266,17 +297,35 @@ final class AdminCarDetailService
 
         $now = new \DateTimeImmutable(
             'now',
-            $timezone
+            $timezone,
         );
 
+        /*
+         * La valeur vient maintenant des paramètres
+         * administrables du gameplay.
+         */
         $cooldownSeconds =
-            DuelPolicyService::PAIR_COOLDOWN_SECONDS;
+            $this->duelPolicyService
+                ->getPairCooldownSeconds();
+
+        /*
+         * La valeur 0 désactive complètement
+         * le cooldown entre les voitures.
+         */
+        if ($cooldownSeconds <= 0) {
+            return [
+                'active' => false,
+                'activePairCount' => 0,
+                'cooldownSeconds' => 0,
+                'pairs' => [],
+            ];
+        }
 
         $since = $now->modify(
             sprintf(
                 '-%d seconds',
-                $cooldownSeconds
-            )
+                $cooldownSeconds,
+            ),
         );
 
         $recentDuels = $this->duelRepository
@@ -286,28 +335,43 @@ final class AdminCarDetailService
             );
 
         /*
-         * Les duels sont déjà triés du plus récent
-         * au plus ancien. On garde donc uniquement
-         * le dernier duel pour chaque adversaire.
+         * Les duels sont triés du plus récent
+         * au plus ancien.
+         *
+         * On conserve uniquement le duel le plus
+         * récent pour chaque adversaire.
+         *
+         * @var array<int, array<string, mixed>>
          */
         $pairsByOpponent = [];
 
         foreach ($recentDuels as $duel) {
-            $attacker = $duel->getAttackerCar();
-            $defender = $duel->getDefenderCar();
+            $attacker =
+                $duel->getAttackerCar();
+
+            $defender =
+                $duel->getDefenderCar();
 
             $opponent =
-                $attacker->getId() === $car->getId()
+                $attacker->getId()
+                === $car->getId()
                     ? $defender
                     : $attacker;
 
-            $opponentId = $opponent->getId();
+            $opponentId =
+                $opponent->getId();
 
             if ($opponentId === null) {
                 continue;
             }
 
-            if (isset($pairsByOpponent[$opponentId])) {
+            if (
+                isset(
+                    $pairsByOpponent[
+                    $opponentId
+                    ],
+                )
+            ) {
                 continue;
             }
 
@@ -316,14 +380,14 @@ final class AdminCarDetailService
                 ->modify(
                     sprintf(
                         '+%d seconds',
-                        $cooldownSeconds
-                    )
+                        $cooldownSeconds,
+                    ),
                 );
 
             $remainingSeconds = max(
                 0,
                 $expiresAt->getTimestamp()
-                - $now->getTimestamp()
+                - $now->getTimestamp(),
             );
 
             if ($remainingSeconds <= 0) {
@@ -333,21 +397,27 @@ final class AdminCarDetailService
             $pairsByOpponent[$opponentId] = [
                 'opponent' => [
                     'id' => $opponentId,
+
                     'pilotName' =>
-                        $opponent->getPilotName(),
-                    'color' => $opponent->getColor(),
+                        $opponent
+                            ->getPilotName(),
+
+                    'color' =>
+                        $opponent->getColor(),
                 ],
 
-                'lastDuelId' => $duel->getId(),
+                'lastDuelId' =>
+                    $duel->getId(),
 
-                'lastDuelAt' =>
-                    $duel->getCreatedAt()->format(
-                        \DateTimeInterface::ATOM
+                'lastDuelAt' => $duel
+                    ->getCreatedAt()
+                    ->format(
+                        \DateTimeInterface::ATOM,
                     ),
 
                 'expiresAt' =>
                     $expiresAt->format(
-                        \DateTimeInterface::ATOM
+                        \DateTimeInterface::ATOM,
                     ),
 
                 'remainingSeconds' =>
@@ -355,11 +425,15 @@ final class AdminCarDetailService
             ];
         }
 
-        $pairs = array_values($pairsByOpponent);
+        $pairs = array_values(
+            $pairsByOpponent,
+        );
 
         return [
             'active' => $pairs !== [],
-            'activePairCount' => count($pairs),
+
+            'activePairCount' =>
+                count($pairs),
 
             'cooldownSeconds' =>
                 $cooldownSeconds,

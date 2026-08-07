@@ -5,18 +5,16 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Entity\Car;
+use App\Enum\GameSettingKey;
 use App\Exception\DuelLimitException;
 use App\Model\DuelPolicyResult;
 use App\Repository\DuelRepository;
 
 final class DuelPolicyService
 {
-    public const MAX_DAILY_DUELS = 20;
-    public const MAX_DAILY_PAIR_DUELS = 3;
-    public const PAIR_COOLDOWN_SECONDS = 600;
-
     public function __construct(
         private readonly DuelRepository $duelRepository,
+        private readonly GameSettingManager $gameSettingManager,
     ) {
     }
 
@@ -25,34 +23,65 @@ final class DuelPolicyService
         Car $defender,
         ?\DateTimeImmutable $now = null,
     ): DuelPolicyResult {
+        $utcTimezone = new \DateTimeZone('UTC');
+
         $now ??= new \DateTimeImmutable(
             'now',
-            new \DateTimeZone('UTC')
+            $utcTimezone,
         );
 
         $nowUtc = $now->setTimezone(
-            new \DateTimeZone('UTC')
+            $utcTimezone,
         );
 
-        $dayStart = $nowUtc->setTime(0, 0);
+        $dayStart = $nowUtc->setTime(
+            0,
+            0,
+            0,
+        );
 
+        /*
+         * Valeurs dynamiques provenant de game_setting.
+         */
+        $dailyAttackLimit =
+            $this->getDailyAttackLimit();
+
+        $pairDailyLimit =
+            $this->getPairDailyLimit();
+
+        $pairCooldownSeconds =
+            $this->getPairCooldownSeconds();
+
+        /*
+         * Nombre de duels initiés aujourd’hui
+         * par la voiture attaquante.
+         */
         $dailyDuelCount = $this->duelRepository
             ->countInitiatedByCarSince(
                 attacker: $attacker,
                 since: $dayStart,
             );
 
-        if ($dailyDuelCount >= self::MAX_DAILY_DUELS) {
+        if (
+            $dailyDuelCount
+            >= $dailyAttackLimit
+        ) {
             throw new DuelLimitException(
                 message: sprintf(
-                    'Cette voiture a déjà lancé %d duels aujourd’hui.',
-                    self::MAX_DAILY_DUELS
+                    'Cette voiture a déjà lancé %d duel(s) aujourd’hui.',
+                    $dailyAttackLimit,
                 ),
                 retryAfterSeconds:
-                $this->secondsUntilNextUtcDay($nowUtc),
+                $this->secondsUntilNextUtcDay(
+                    $nowUtc,
+                ),
             );
         }
 
+        /*
+         * Nombre de duels entre les deux voitures
+         * depuis le début de la journée UTC.
+         */
         $pairDuelCount = $this->duelRepository
             ->countBetweenCarsSince(
                 firstCar: $attacker,
@@ -60,64 +89,133 @@ final class DuelPolicyService
                 since: $dayStart,
             );
 
-        if ($pairDuelCount >= self::MAX_DAILY_PAIR_DUELS) {
+        if (
+            $pairDuelCount
+            >= $pairDailyLimit
+        ) {
             throw new DuelLimitException(
                 message: sprintf(
                     'Ces deux voitures se sont déjà affrontées %d fois aujourd’hui.',
-                    self::MAX_DAILY_PAIR_DUELS
+                    $pairDailyLimit,
                 ),
                 retryAfterSeconds:
-                $this->secondsUntilNextUtcDay($nowUtc),
+                $this->secondsUntilNextUtcDay(
+                    $nowUtc,
+                ),
             );
         }
 
-        $latestDuel = $this->duelRepository
-            ->findLatestBetweenCars(
-                firstCar: $attacker,
-                secondCar: $defender,
-            );
-
-        if ($latestDuel !== null) {
-            $nextAvailableAt = $latestDuel
-                ->getCreatedAt()
-                ->modify(sprintf(
-                    '+%d seconds',
-                    self::PAIR_COOLDOWN_SECONDS
-                ));
-
-            if ($nowUtc < $nextAvailableAt) {
-                $retryAfterSeconds = max(
-                    1,
-                    $nextAvailableAt->getTimestamp()
-                    - $nowUtc->getTimestamp()
+        /*
+         * Le cooldown peut être désactivé depuis
+         * l’administration en utilisant la valeur 0.
+         */
+        if ($pairCooldownSeconds > 0) {
+            $latestDuel = $this->duelRepository
+                ->findLatestBetweenCars(
+                    firstCar: $attacker,
+                    secondCar: $defender,
                 );
 
-                throw new DuelLimitException(
-                    message: sprintf(
-                        'Ces voitures doivent attendre encore %d seconde(s) avant de s’affronter à nouveau.',
-                        $retryAfterSeconds
-                    ),
-                    retryAfterSeconds: $retryAfterSeconds,
-                );
+            if ($latestDuel !== null) {
+                $nextAvailableAt = $latestDuel
+                    ->getCreatedAt()
+                    ->modify(
+                        sprintf(
+                            '+%d seconds',
+                            $pairCooldownSeconds,
+                        ),
+                    );
+
+                if ($nowUtc < $nextAvailableAt) {
+                    $retryAfterSeconds = max(
+                        1,
+                        $nextAvailableAt
+                            ->getTimestamp()
+                        - $nowUtc->getTimestamp(),
+                    );
+
+                    throw new DuelLimitException(
+                        message: sprintf(
+                            'Ces voitures doivent attendre encore %d seconde(s) avant de s’affronter à nouveau.',
+                            $retryAfterSeconds,
+                        ),
+                        retryAfterSeconds:
+                        $retryAfterSeconds,
+                    );
+                }
             }
         }
 
-        $pairDuelNumber = $pairDuelCount + 1;
+        $dailyDuelNumber =
+            $dailyDuelCount + 1;
+
+        $pairDuelNumber =
+            $pairDuelCount + 1;
 
         return new DuelPolicyResult(
-            dailyDuelNumber: $dailyDuelCount + 1,
-            pairDuelNumber: $pairDuelNumber,
-            rewardMultiplier: $this->resolveRewardMultiplier(
-                $pairDuelNumber
+            dailyDuelNumber:
+            $dailyDuelNumber,
+
+            pairDuelNumber:
+            $pairDuelNumber,
+
+            rewardMultiplier:
+            $this->resolveRewardMultiplier(
+                $pairDuelNumber,
             ),
-            ratingMultiplier: $this->resolveRatingMultiplier(
-                $pairDuelNumber
+
+            ratingMultiplier:
+            $this->resolveRatingMultiplier(
+                $pairDuelNumber,
             ),
         );
     }
 
+    /**
+     * Nombre maximal de duels qu’une voiture
+     * peut lancer pendant une journée UTC.
+     */
+    public function getDailyAttackLimit(): int
+    {
+        return $this->gameSettingManager->getInt(
+            GameSettingKey::
+            DUEL_DAILY_ATTACK_LIMIT,
+        );
+    }
+
+    /**
+     * Nombre maximal de duels autorisés
+     * quotidiennement entre les deux mêmes voitures.
+     */
+    public function getPairDailyLimit(): int
+    {
+        return $this->gameSettingManager->getInt(
+            GameSettingKey::
+            DUEL_PAIR_DAILY_LIMIT,
+        );
+    }
+
+    /**
+     * Délai minimal entre deux duels impliquant
+     * la même paire de voitures.
+     *
+     * La valeur 0 désactive le cooldown.
+     */
+    public function getPairCooldownSeconds(): int
+    {
+        return $this->gameSettingManager->getInt(
+            GameSettingKey::
+            DUEL_PAIR_COOLDOWN_SECONDS,
+        );
+    }
+
+    /**
+     * Réduction progressive des récompenses
+     * lorsque les mêmes voitures s’affrontent
+     * plusieurs fois dans la même journée.
+     */
     private function resolveRewardMultiplier(
-        int $pairDuelNumber
+        int $pairDuelNumber,
     ): float {
         return match ($pairDuelNumber) {
             1 => 1.0,
@@ -127,8 +225,12 @@ final class DuelPolicyService
         };
     }
 
+    /**
+     * Réduction progressive des variations Elo
+     * pour les affrontements répétés.
+     */
     private function resolveRatingMultiplier(
-        int $pairDuelNumber
+        int $pairDuelNumber,
     ): float {
         return match ($pairDuelNumber) {
             1 => 1.0,
@@ -137,16 +239,25 @@ final class DuelPolicyService
         };
     }
 
+    /**
+     * Calcule le nombre de secondes restant
+     * avant le prochain jour UTC.
+     */
     private function secondsUntilNextUtcDay(
-        \DateTimeImmutable $now
+        \DateTimeImmutable $now,
     ): int {
         $nextDay = $now
-            ->setTime(0, 0)
+            ->setTime(
+                0,
+                0,
+                0,
+            )
             ->modify('+1 day');
 
         return max(
             1,
-            $nextDay->getTimestamp() - $now->getTimestamp()
+            $nextDay->getTimestamp()
+            - $now->getTimestamp(),
         );
     }
 }
