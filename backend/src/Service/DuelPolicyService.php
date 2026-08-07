@@ -221,7 +221,7 @@ final class DuelPolicyService
             1 => 1.0,
             2 => 0.5,
             3 => 0.25,
-            default => 0.0,
+            default => 0.2,
         };
     }
 
