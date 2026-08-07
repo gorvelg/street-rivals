@@ -1,119 +1,205 @@
-import { computed, ref } from 'vue'
-import { getJwtRoles } from '../utils/jwt'
+import {
+    computed,
+    ref,
+} from 'vue'
 import { defineStore } from 'pinia'
+import { getJwtRoles } from '../utils/jwt'
 import {
     apiRequest,
     getStoredToken,
     removeStoredToken,
     storeToken,
 } from '../services/api'
-import type { AuthTokenResponse, User } from '../types/api'
+import type {
+    AuthTokenResponse,
+    User,
+} from '../types/api'
 
-
-export const useAuthStore = defineStore('auth', () => {
-    const token = ref<string | null>(getStoredToken())
-
-    const roles = computed<string[]>(() => {
-        return getJwtRoles(token.value)
-    })
-
-    const isAdmin = computed<boolean>(() => {
-        return roles.value.includes('ROLE_ADMIN')
-    })
-
-    const user = ref<User | null>(null)
-    const loading = ref(false)
-
-    const isAuthenticated = computed(() => token.value !== null)
-
-    async function login(email: string, password: string): Promise<void> {
-        loading.value = true
-
-        try {
-            const response = await apiRequest<AuthTokenResponse>(
-                '/api/login_check',
-                {
-                    method: 'POST',
-                    authenticated: false,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email,
-                        password,
-                    }),
-                },
+export const useAuthStore = defineStore(
+    'auth',
+    () => {
+        const token =
+            ref<string | null>(
+                getStoredToken(),
             )
 
-            token.value = response.token
-            storeToken(response.token)
+        const user =
+            ref<User | null>(null)
 
-            await fetchCurrentUser()
-        } catch (error) {
-            logout()
-            throw error
-        } finally {
-            loading.value = false
-        }
-    }
+        const loading =
+            ref<boolean>(false)
 
-    async function register(
-        email: string,
-        password: string,
-    ): Promise<void> {
-        loading.value = true
-
-        try {
-            await apiRequest('/api/register', {
-                method: 'POST',
-                authenticated: false,
-                body: JSON.stringify({
-                    email,
-                    password,
-                }),
+        const roles =
+            computed<string[]>(() => {
+                return getJwtRoles(
+                    token.value,
+                )
             })
 
-            await login(email, password)
-        } finally {
-            loading.value = false
-        }
-    }
+        const isAuthenticated =
+            computed<boolean>(() => {
+                return token.value !== null
+            })
 
-    async function fetchCurrentUser(): Promise<void> {
-        if (token.value === null) {
+        const isAdmin =
+            computed<boolean>(() => {
+                return roles.value.includes(
+                    'ROLE_ADMIN',
+                )
+            })
+
+        async function login(
+            email: string,
+            password: string,
+        ): Promise<void> {
+            loading.value = true
+
+            try {
+                const response =
+                    await apiRequest<
+                        AuthTokenResponse
+                    >(
+                        '/api/login_check',
+                        {
+                            method: 'POST',
+
+                            authenticated: false,
+
+                            headers: {
+                                'Content-Type':
+                                    'application/json',
+                            },
+
+                            body: JSON.stringify({
+                                email,
+                                password,
+                            }),
+                        },
+                    )
+
+                token.value =
+                    response.token
+
+                storeToken(
+                    response.token,
+                )
+
+                await fetchCurrentUser()
+            } catch (error) {
+                logout()
+
+                throw error
+            } finally {
+                loading.value = false
+            }
+        }
+
+        async function register(
+            email: string,
+            password: string,
+        ): Promise<void> {
+            loading.value = true
+
+            try {
+                await apiRequest(
+                    '/api/register',
+                    {
+                        method: 'POST',
+
+                        authenticated: false,
+
+                        /*
+                         * On utilise explicitement
+                         * application/json, comme
+                         * pour le login.
+                         */
+                        headers: {
+                            'Content-Type':
+                                'application/json',
+                        },
+
+                        body: JSON.stringify({
+                            email,
+                            password,
+                        }),
+                    },
+                )
+
+                /*
+                 * Connexion automatique après
+                 * création du compte.
+                 */
+                await login(
+                    email,
+                    password,
+                )
+            } finally {
+                loading.value = false
+            }
+        }
+
+        async function fetchCurrentUser():
+            Promise<void> {
+            if (token.value === null) {
+                user.value = null
+
+                return
+            }
+
+            try {
+                user.value =
+                    await apiRequest<User>(
+                        '/api/me',
+                    )
+            } catch (error) {
+                logout()
+
+                throw error
+            }
+        }
+
+        async function bootstrap():
+            Promise<void> {
+            if (
+                token.value === null
+                || user.value !== null
+            ) {
+                return
+            }
+
+            await fetchCurrentUser()
+        }
+
+        function logout(): void {
+            token.value = null
             user.value = null
-            return
+
+            removeStoredToken()
         }
 
-        try {
-            user.value = await apiRequest<User>('/api/me')
-        } catch (error) {
-            logout()
-            throw error
+        return {
+            /*
+             * State
+             */
+            token,
+            user,
+            loading,
+
+            /*
+             * Computed
+             */
+            roles,
+            isAuthenticated,
+            isAdmin,
+
+            /*
+             * Actions
+             */
+            login,
+            register,
+            logout,
+            fetchCurrentUser,
+            bootstrap,
         }
-    }
-
-    async function bootstrap(): Promise<void> {
-        if (token.value === null || user.value !== null) {
-            return
-        }
-
-        await fetchCurrentUser()
-    }
-
-    function logout(): void {
-        token.value = null
-        user.value = null
-        removeStoredToken()
-    }
-
-    return {
-        token,
-        roles,
-        isAuthenticated,
-        isAdmin,
-
-        login,
-        logout,
-    }
-})
+    },
+)
