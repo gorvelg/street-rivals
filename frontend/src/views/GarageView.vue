@@ -5,30 +5,43 @@ import {
   ref,
   watch,
 } from 'vue'
-import { useRouter } from 'vue-router'
+
+import { useRouter }
+  from 'vue-router'
+
+import CarVisual
+  from '../components/CarVisual.vue'
+
 import GarageCarCard
   from '../components/GarageCarCard.vue'
+
 import OpponentCard
   from '../components/OpponentCard.vue'
+
 import {
   ApiError,
   apiRequest,
   getCollectionMembers,
 } from '../services/api'
+
 import type {
   ApiCollection,
   Car,
+  CarBodyStyle,
   CarInventoryCard,
   CarStats,
+  CarWheelStyle,
   EquipmentSlot,
   EquipCarCardResponse,
   MatchmakingOpponent,
   PendingDuel,
 } from '../types/api'
 
-const router = useRouter()
+const router =
+    useRouter()
 
-const cars = ref<Car[]>([])
+const cars =
+    ref<Car[]>([])
 
 const selectedCarId =
     ref<number | null>(null)
@@ -73,6 +86,112 @@ const pilotName =
 
 const carColor =
     ref('#e63946')
+
+/*
+ * =====================================
+ * PERSONNALISATION
+ * =====================================
+ */
+
+const showCustomization =
+    ref(false)
+
+const savingCustomization =
+    ref(false)
+
+const customizationColor =
+    ref('#E63946')
+
+const customizationBodyStyle =
+    ref<CarBodyStyle>(
+        'coupe_01',
+    )
+
+const customizationWheelStyle =
+    ref<CarWheelStyle>(
+        'street_01',
+    )
+
+const bodyStyles: Array<{
+  value: CarBodyStyle
+  label: string
+}> = [
+  {
+    value: 'compact_01',
+    label: 'Compacte sportive',
+  },
+  {
+    value: 'hatch_01',
+    label: 'Hot hatch',
+  },
+  {
+    value: 'coupe_01',
+    label: 'Coupé sportif',
+  },
+  {
+    value: 'coupe_02',
+    label: 'Coupé tuner',
+  },
+  {
+    value: 'muscle_01',
+    label: 'Muscle',
+  },
+  {
+    value: 'roadster_01',
+    label: 'Roadster',
+  },
+  {
+    value: 'sedan_01',
+    label: 'Berline sportive',
+  },
+  {
+    value: 'rally_01',
+    label: 'Rallye',
+  },
+  {
+    value: 'retro_01',
+    label: 'Coupé rétro',
+  },
+  {
+    value: 'super_01',
+    label: 'Supercar',
+  },
+]
+
+const wheelStyles: Array<{
+  value: CarWheelStyle
+  label: string
+}> = [
+  {
+    value: 'street_01',
+    label: 'Street',
+  },
+  {
+    value: 'five_spoke',
+    label: '5 branches',
+  },
+  {
+    value: 'multi_spoke',
+    label: 'Multi-branches',
+  },
+]
+
+const quickColors = [
+  '#E63946',
+  '#2563EB',
+  '#16A34A',
+  '#F59E0B',
+  '#7C3AED',
+  '#EC4899',
+  '#111827',
+  '#F8FAFC',
+]
+
+/*
+ * =====================================
+ * ÉQUIPEMENTS
+ * =====================================
+ */
 
 const equipmentSlots: Array<{
   key: EquipmentSlot
@@ -134,36 +253,46 @@ const statBoostCards =
       )
     })
 
-const equipmentGroups = computed(() => {
-  return equipmentSlots.map(
-      (slot) => {
-        const cards =
-            carCards.value
-                .filter(
-                    (carCard) =>
-                        carCard.card.kind
-                        === 'equipment'
-                        && carCard.card
-                            .equipmentSlot
-                        === slot.key,
-                )
-                .sort(
-                    (first, second) =>
-                        Number(
-                            second.equipped,
-                        )
-                        - Number(
-                            first.equipped,
-                        ),
-                )
+const equipmentGroups =
+    computed(() => {
+      return equipmentSlots.map(
+          (slot) => {
+            const cards =
+                carCards.value
+                    .filter(
+                        (carCard) =>
+                            carCard.card.kind
+                            === 'equipment'
+                            && carCard.card
+                                .equipmentSlot
+                            === slot.key,
+                    )
+                    .sort(
+                        (
+                            first,
+                            second,
+                        ) =>
+                            Number(
+                                second.equipped,
+                            )
+                            - Number(
+                                first.equipped,
+                            ),
+                    )
 
-        return {
-          ...slot,
-          cards,
-        }
-      },
-  )
-})
+            return {
+              ...slot,
+              cards,
+            }
+          },
+      )
+    })
+
+/*
+ * =====================================
+ * CHARGEMENT
+ * =====================================
+ */
 
 async function loadCars():
     Promise<void> {
@@ -227,7 +356,9 @@ async function loadCars():
 
 async function loadSelectedCarDetails():
     Promise<void> {
-  if (selectedCarId.value === null) {
+  if (
+      selectedCarId.value === null
+  ) {
     carStats.value = null
     carCards.value = []
     opponents.value = []
@@ -287,6 +418,108 @@ async function loadSelectedCarDetails():
   }
 }
 
+/*
+ * =====================================
+ * PERSONNALISATION
+ * =====================================
+ */
+
+function openCustomization():
+    void {
+  if (selectedCar.value === null) {
+    return
+  }
+
+  customizationColor.value =
+      selectedCar.value.color
+
+  customizationBodyStyle.value =
+      selectedCar.value.bodyStyle
+
+  customizationWheelStyle.value =
+      selectedCar.value.wheelStyle
+
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  showCustomization.value = true
+}
+
+function closeCustomization():
+    void {
+  showCustomization.value = false
+}
+
+async function saveCustomization():
+    Promise<void> {
+  if (
+      selectedCar.value === null
+      || savingCustomization.value
+  ) {
+    return
+  }
+
+  savingCustomization.value = true
+
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  try {
+    const updatedCar =
+        await apiRequest<Car>(
+            `/api/cars/${selectedCar.value.id}`,
+            {
+              method: 'PATCH',
+
+              headers: {
+                'Content-Type':
+                    'application/merge-patch+json',
+              },
+
+              body: JSON.stringify({
+                color:
+                customizationColor.value,
+
+                bodyStyle:
+                customizationBodyStyle.value,
+
+                wheelStyle:
+                customizationWheelStyle.value,
+              }),
+            },
+        )
+
+    const index =
+        cars.value.findIndex(
+            (car) =>
+                car.id
+                === updatedCar.id,
+        )
+
+    if (index !== -1) {
+      cars.value[index] =
+          updatedCar
+    }
+
+    showCustomization.value =
+        false
+
+    successMessage.value =
+        'La personnalisation a été enregistrée.'
+  } catch (error) {
+    handleError(error)
+  } finally {
+    savingCustomization.value =
+        false
+  }
+}
+
+/*
+ * =====================================
+ * ÉQUIPEMENT
+ * =====================================
+ */
+
 async function equipCarCard(
     carCard: CarInventoryCard,
 ): Promise<void> {
@@ -314,18 +547,9 @@ async function equipCarCard(
             },
         )
 
-    /*
-     * Les stats retournées par l'endpoint
-     * peuvent être utilisées immédiatement.
-     */
     carStats.value =
         response.stats
 
-    /*
-     * On recharge ensuite l'inventaire
-     * et le matchmaking car la puissance
-     * effective de la voiture a changé.
-     */
     const [
       cardsResponse,
       opponentsResponse,
@@ -353,7 +577,8 @@ async function equipCarCard(
             opponentsResponse,
         )
 
-    selectedOpponent.value = null
+    selectedOpponent.value =
+        null
 
     successMessage.value =
         response.updated
@@ -367,9 +592,16 @@ async function equipCarCard(
   }
 }
 
+/*
+ * =====================================
+ * CRÉATION
+ * =====================================
+ */
+
 async function createCar():
     Promise<void> {
   creatingCar.value = true
+
   errorMessage.value = ''
   successMessage.value = ''
 
@@ -386,12 +618,20 @@ async function createCar():
 
                 color:
                 carColor.value,
+
+                bodyStyle:
+                    'coupe_01',
+
+                wheelStyle:
+                    'street_01',
               }),
             },
         )
 
     pilotName.value = ''
-    showCreateForm.value = false
+
+    showCreateForm.value =
+        false
 
     await loadCars()
 
@@ -411,7 +651,12 @@ function selectCar(
     carId: number,
 ): void {
   successMessage.value = ''
-  selectedCarId.value = carId
+
+  showCustomization.value =
+      false
+
+  selectedCarId.value =
+      carId
 }
 
 function selectOpponent(
@@ -427,7 +672,8 @@ function selectOpponent(
   selectedOpponent.value =
       opponent
 
-  const pendingDuel: PendingDuel = {
+  const pendingDuel:
+      PendingDuel = {
     attackerCarId:
     selectedCarId.value,
 
@@ -474,6 +720,12 @@ async function openDuel():
     name: 'duel',
   })
 }
+
+/*
+ * =====================================
+ * FORMATAGE
+ * =====================================
+ */
 
 function statLabel(
     stat: string,
@@ -565,7 +817,10 @@ function formatAppliedCard(
     value: number,
     stat: string,
 ): string {
-  return `${signedValue(value)} ${statLabel(stat)}`
+  return (
+      `${signedValue(value)}` +
+      ` ${statLabel(stat)}`
+  )
 }
 
 function handleError(
@@ -582,6 +837,12 @@ function handleError(
       'Une erreur inattendue est survenue.'
 }
 
+/*
+ * =====================================
+ * WATCHERS
+ * =====================================
+ */
+
 watch(
     selectedCarId,
     async (carId) => {
@@ -593,7 +854,12 @@ watch(
         carStats.value = null
         carCards.value = []
         opponents.value = []
-        selectedOpponent.value = null
+
+        selectedOpponent.value =
+            null
+
+        showCustomization.value =
+            false
 
         return
       }
@@ -653,6 +919,10 @@ onMounted(
       {{ successMessage }}
     </p>
 
+    <!-- ===============================
+         CRÉATION
+    ================================ -->
+
     <form
         v-if="showCreateForm"
         class="panel create-car-form"
@@ -669,7 +939,7 @@ onMounted(
           <input
               v-model.trim="pilotName"
               type="text"
-              minlength="2"
+              minlength="3"
               maxlength="32"
               autocomplete="off"
               required
@@ -704,8 +974,14 @@ onMounted(
       Chargement du garage...
     </p>
 
+    <!-- ===============================
+         LISTE DES VOITURES
+    ================================ -->
+
     <div
-        v-else-if="cars.length > 0"
+        v-else-if="
+          cars.length > 0
+        "
         class="garage-list"
     >
       <GarageCarCard
@@ -713,14 +989,17 @@ onMounted(
           :key="car.id"
           :car="car"
           :selected="
-            car.id === selectedCarId
+            car.id
+            === selectedCarId
           "
           @select="selectCar"
       />
     </div>
 
     <div
-        v-else-if="!showCreateForm"
+        v-else-if="
+          !showCreateForm
+        "
         class="empty-state"
     >
       <h2>
@@ -734,14 +1013,26 @@ onMounted(
       <button
           type="button"
           class="button button-primary"
-          @click="showCreateForm = true"
+          @click="
+            showCreateForm = true
+          "
       >
         Créer une voiture
       </button>
     </div>
 
-    <template v-if="selectedCar !== null">
-      <section class="panel selected-car-panel">
+    <template
+        v-if="
+          selectedCar !== null
+        "
+    >
+      <!-- ===============================
+           VOITURE SÉLECTIONNÉE
+      ================================ -->
+
+      <section
+          class="panel selected-car-panel"
+      >
         <div class="section-heading">
           <div>
             <p class="eyebrow">
@@ -751,14 +1042,41 @@ onMounted(
             <h2>
               {{ selectedCar.pilotName }}
             </h2>
+
+            <p class="selected-car-meta">
+              Niveau
+              {{ selectedCar.level }}
+              ·
+              {{ selectedCar.rating ?? 1000 }}
+              Elo
+            </p>
           </div>
 
-          <div
-              class="large-car-color"
-              :style="{
-                backgroundColor:
-                  selectedCar.color,
-              }"
+          <button
+              type="button"
+              class="button button-secondary"
+              @click="
+                openCustomization
+              "
+          >
+            Personnaliser
+          </button>
+        </div>
+
+        <div class="selected-car-visual">
+          <CarVisual
+              :color="
+                selectedCar.color
+              "
+              :body-style="
+                selectedCar.bodyStyle
+              "
+              :wheel-style="
+                selectedCar.wheelStyle
+              "
+              :pilot-name="
+                selectedCar.pilotName
+              "
           />
         </div>
 
@@ -824,7 +1142,9 @@ onMounted(
             </div>
 
             <div>
-              <span>Grip</span>
+              <span>
+                Grip
+              </span>
 
               <strong>
                 {{
@@ -835,7 +1155,9 @@ onMounted(
 
               <small>
                 Base
-                {{ carStats.base.grip }}
+                {{
+                  carStats.base.grip
+                }}
                 ·
                 {{
                   signedValue(
@@ -914,7 +1236,231 @@ onMounted(
         </template>
       </section>
 
-      <!-- ÉQUIPEMENTS -->
+      <!-- ===============================
+           PERSONNALISATION
+      ================================ -->
+
+      <section
+          v-if="
+            showCustomization
+          "
+          class="
+            panel
+            customization-panel
+          "
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">
+              Atelier
+            </p>
+
+            <h2>
+              Personnaliser
+              {{ selectedCar.pilotName }}
+            </h2>
+          </div>
+        </div>
+
+        <div class="customization-layout">
+          <div class="customization-preview">
+            <CarVisual
+                :color="
+                  customizationColor
+                "
+                :body-style="
+                  customizationBodyStyle
+                "
+                :wheel-style="
+                  customizationWheelStyle
+                "
+                :pilot-name="
+                  selectedCar.pilotName
+                "
+            />
+          </div>
+
+          <div class="customization-controls">
+            <!-- COULEUR -->
+
+            <fieldset
+                class="customization-group"
+            >
+              <legend>
+                Couleur
+              </legend>
+
+              <div class="color-list">
+                <button
+                    v-for="
+                      color in
+                        quickColors
+                    "
+                    :key="color"
+                    type="button"
+                    class="color-button"
+                    :class="{
+                      'color-button-selected':
+                        customizationColor
+                        .toUpperCase()
+                        === color
+                        .toUpperCase(),
+                    }"
+                    :style="{
+                      backgroundColor:
+                        color,
+                    }"
+                    :aria-label="
+                      `Couleur ${color}`
+                    "
+                    @click="
+                      customizationColor =
+                        color
+                    "
+                />
+              </div>
+
+              <label
+                  class="custom-color-picker"
+              >
+                Couleur personnalisée
+
+                <input
+                    v-model="
+                      customizationColor
+                    "
+                    type="color"
+                >
+
+                <span>
+                  {{
+                    customizationColor
+                        .toUpperCase()
+                  }}
+                </span>
+              </label>
+            </fieldset>
+
+            <!-- CARROSSERIE -->
+
+            <fieldset
+                class="customization-group"
+            >
+              <legend>
+                Carrosserie
+              </legend>
+
+              <div
+                  class="
+                    customization-option-grid
+                  "
+              >
+                <button
+                    v-for="
+                      body in
+                        bodyStyles
+                    "
+                    :key="
+                      body.value
+                    "
+                    type="button"
+                    class="
+                      customization-option
+                    "
+                    :class="{
+                      'customization-option-selected':
+                        customizationBodyStyle
+                        === body.value,
+                    }"
+                    @click="
+                      customizationBodyStyle =
+                        body.value
+                    "
+                >
+                  {{ body.label }}
+                </button>
+              </div>
+            </fieldset>
+
+            <!-- JANTES -->
+
+            <fieldset
+                class="customization-group"
+            >
+              <legend>
+                Jantes
+              </legend>
+
+              <div
+                  class="
+                    customization-option-grid
+                  "
+              >
+                <button
+                    v-for="
+                      wheel in
+                        wheelStyles
+                    "
+                    :key="
+                      wheel.value
+                    "
+                    type="button"
+                    class="
+                      customization-option
+                    "
+                    :class="{
+                      'customization-option-selected':
+                        customizationWheelStyle
+                        === wheel.value,
+                    }"
+                    @click="
+                      customizationWheelStyle =
+                        wheel.value
+                    "
+                >
+                  {{ wheel.label }}
+                </button>
+              </div>
+            </fieldset>
+          </div>
+        </div>
+
+        <div class="customization-actions">
+          <button
+              type="button"
+              class="button button-secondary"
+              :disabled="
+                savingCustomization
+              "
+              @click="
+                closeCustomization
+              "
+          >
+            Annuler
+          </button>
+
+          <button
+              type="button"
+              class="button button-primary"
+              :disabled="
+                savingCustomization
+              "
+              @click="
+                saveCustomization
+              "
+          >
+            {{
+              savingCustomization
+                  ? 'Enregistrement...'
+                  : 'Enregistrer'
+            }}
+          </button>
+        </div>
+      </section>
+
+      <!-- ===============================
+           ÉQUIPEMENTS
+      ================================ -->
 
       <section class="panel">
         <div class="section-heading">
@@ -935,8 +1481,12 @@ onMounted(
                 group in
                   equipmentGroups
               "
-              :key="group.key"
-              class="equipment-slot-card"
+              :key="
+                group.key
+              "
+              class="
+                equipment-slot-card
+              "
           >
             <h3>
               {{ group.label }}
@@ -1008,7 +1558,10 @@ onMounted(
                 <button
                     v-else
                     type="button"
-                    class="button button-secondary"
+                    class="
+                      button
+                      button-secondary
+                    "
                     :disabled="
                       equippingCarCardId
                         !== null
@@ -1032,7 +1585,9 @@ onMounted(
         </div>
       </section>
 
-      <!-- BONUS PERMANENTS -->
+      <!-- ===============================
+           BONUS PERMANENTS
+      ================================ -->
 
       <section class="panel">
         <div class="section-heading">
@@ -1083,7 +1638,8 @@ onMounted(
                 {{ carCard.tier }}
                 /
                 {{
-                  carCard.card.maxTier
+                  carCard.card
+                      .maxTier
                 }}
               </small>
 
@@ -1096,14 +1652,18 @@ onMounted(
               </p>
             </div>
 
-            <span class="active-badge">
+            <span
+                class="active-badge"
+            >
               Toujours actif
             </span>
           </article>
         </div>
       </section>
 
-      <!-- CAPACITÉS -->
+      <!-- ===============================
+           CAPACITÉS
+      ================================ -->
 
       <section class="panel">
         <div class="section-heading">
@@ -1120,7 +1680,8 @@ onMounted(
 
         <p
             v-if="
-              abilityCards.length === 0
+              abilityCards.length
+              === 0
             "
             class="muted"
         >
@@ -1153,7 +1714,8 @@ onMounted(
                 {{ carCard.tier }}
                 /
                 {{
-                  carCard.card.maxTier
+                  carCard.card
+                      .maxTier
                 }}
               </small>
 
@@ -1177,7 +1739,9 @@ onMounted(
         </div>
       </section>
 
-      <!-- MATCHMAKING -->
+      <!-- ===============================
+           MATCHMAKING
+      ================================ -->
 
       <section class="opponents-section">
         <div class="section-heading">
@@ -1193,7 +1757,10 @@ onMounted(
 
           <button
               type="button"
-              class="button button-secondary"
+              class="
+                button
+                button-secondary
+              "
               :disabled="
                 loadingDetails
               "
@@ -1282,8 +1849,13 @@ onMounted(
 
           <button
               type="button"
-              class="button button-primary"
-              @click="openDuel"
+              class="
+                button
+                button-primary
+              "
+              @click="
+                openDuel
+              "
           >
             Aller au duel
           </button>
@@ -1294,6 +1866,282 @@ onMounted(
 </template>
 
 <style scoped>
+/*
+ * =====================================
+ * VOITURE
+ * =====================================
+ */
+
+.selected-car-meta {
+  margin:
+      5px
+      0
+      0;
+
+  opacity: 0.65;
+}
+
+.selected-car-visual {
+  width: 100%;
+  max-width: 720px;
+
+  margin:
+      10px
+      auto
+      30px;
+
+  padding:
+      10px
+      30px;
+
+  border-radius: 18px;
+
+  background:
+      radial-gradient(
+          circle at 50% 80%,
+          rgba(255, 255, 255, 0.07),
+          transparent 55%
+      );
+}
+
+/*
+ * =====================================
+ * PERSONNALISATION
+ * =====================================
+ */
+
+.customization-panel {
+  overflow: hidden;
+}
+
+.customization-layout {
+  display: grid;
+
+  grid-template-columns:
+      minmax(0, 1.3fr)
+      minmax(300px, 0.7fr);
+
+  gap: 30px;
+
+  align-items: center;
+}
+
+.customization-preview {
+  min-width: 0;
+
+  padding: 25px;
+
+  border-radius: 16px;
+
+  background:
+      radial-gradient(
+          circle at 50% 75%,
+          rgba(255, 255, 255, 0.09),
+          rgba(127, 127, 127, 0.03) 65%
+      );
+}
+
+.customization-controls {
+  display: grid;
+  gap: 22px;
+}
+
+.customization-group {
+  min-width: 0;
+
+  margin: 0;
+
+  padding: 0;
+
+  border: 0;
+}
+
+.customization-group legend {
+  margin-bottom: 10px;
+
+  font-weight: 800;
+}
+
+.color-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+
+  margin-bottom: 14px;
+}
+
+.color-button {
+  width: 36px;
+  height: 36px;
+
+  padding: 0;
+
+  border:
+      3px solid
+      transparent;
+
+  border-radius: 50%;
+
+  cursor: pointer;
+
+  transition:
+      transform
+      140ms
+      ease,
+      border-color
+      140ms
+      ease;
+}
+
+.color-button:hover {
+  transform:
+      scale(1.08);
+}
+
+.color-button-selected {
+  border-color:
+      rgba(
+          255,
+          255,
+          255,
+          0.95
+      );
+
+  box-shadow:
+      0
+      0
+      0
+      2px
+      rgba(
+          0,
+          0,
+          0,
+          0.25
+      );
+}
+
+.custom-color-picker {
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  font-size: 0.85rem;
+}
+
+.custom-color-picker input {
+  width: 48px;
+  height: 36px;
+
+  padding: 2px;
+
+  cursor: pointer;
+}
+
+.customization-option-grid {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          auto-fit,
+          minmax(120px, 1fr)
+      );
+
+  gap: 8px;
+}
+
+.customization-option {
+  padding:
+      11px
+      12px;
+
+  border:
+      1px solid
+      rgba(
+          127,
+          127,
+          127,
+          0.28
+      );
+
+  border-radius: 9px;
+
+  background:
+      rgba(
+          127,
+          127,
+          127,
+          0.04
+      );
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font: inherit;
+
+  transition:
+      border-color
+      140ms
+      ease,
+      background
+      140ms
+      ease,
+      transform
+      140ms
+      ease;
+}
+
+.customization-option:hover {
+  transform:
+      translateY(-1px);
+
+  background:
+      rgba(
+          127,
+          127,
+          127,
+          0.09
+      );
+}
+
+.customization-option-selected {
+  border-color:
+      rgba(
+          70,
+          130,
+          230,
+          0.8
+      );
+
+  background:
+      rgba(
+          70,
+          130,
+          230,
+          0.13
+      );
+
+  font-weight: 800;
+}
+
+.customization-actions {
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 26px;
+}
+
+/*
+ * =====================================
+ * INVENTAIRE
+ * =====================================
+ */
+
 .equipment-grid,
 .inventory-grid {
   display: grid;
@@ -1302,24 +2150,32 @@ onMounted(
 
 .equipment-grid {
   grid-template-columns:
-    repeat(
-      auto-fit,
-      minmax(280px, 1fr)
-    );
+      repeat(
+          auto-fit,
+          minmax(280px, 1fr)
+      );
 }
 
 .inventory-grid {
   grid-template-columns:
-    repeat(
-      auto-fit,
-      minmax(250px, 1fr)
-    );
+      repeat(
+          auto-fit,
+          minmax(250px, 1fr)
+      );
 }
 
 .equipment-slot-card {
   padding: 16px;
-  border: 1px solid
-  rgba(127, 127, 127, 0.25);
+
+  border:
+      1px solid
+      rgba(
+          127,
+          127,
+          127,
+          0.25
+      );
+
   border-radius: 12px;
 }
 
@@ -1334,24 +2190,44 @@ onMounted(
 
 .inventory-card {
   display: flex;
+
   align-items: center;
-  justify-content: space-between;
+
+  justify-content:
+      space-between;
+
   gap: 16px;
 
   padding: 14px;
 
-  border: 1px solid
-  rgba(127, 127, 127, 0.2);
+  border:
+      1px solid
+      rgba(
+          127,
+          127,
+          127,
+          0.2
+      );
 
   border-radius: 10px;
 
   background:
-      rgba(127, 127, 127, 0.05);
+      rgba(
+          127,
+          127,
+          127,
+          0.05
+      );
 }
 
 .inventory-card-equipped {
   border-color:
-      rgba(50, 170, 100, 0.55);
+      rgba(
+          50,
+          170,
+          100,
+          0.55
+      );
 }
 
 .inventory-card > div {
@@ -1371,31 +2247,80 @@ onMounted(
 .active-badge {
   flex-shrink: 0;
 
-  padding: 6px 9px;
+  padding:
+      6px
+      9px;
 
   border-radius: 999px;
 
   font-size: 0.75rem;
+
   font-weight: 800;
 }
 
 .equipped-badge {
   background:
-      rgba(50, 170, 100, 0.15);
+      rgba(
+          50,
+          170,
+          100,
+          0.15
+      );
 }
 
 .active-badge {
   background:
-      rgba(50, 110, 210, 0.15);
+      rgba(
+          50,
+          110,
+          210,
+          0.15
+      );
 }
 
-@media (max-width: 650px) {
+/*
+ * =====================================
+ * RESPONSIVE
+ * =====================================
+ */
+
+@media (
+max-width: 850px
+) {
+  .customization-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .customization-preview {
+    padding: 10px;
+  }
+}
+
+@media (
+max-width: 650px
+) {
   .inventory-card {
     align-items: stretch;
+
     flex-direction: column;
   }
 
   .inventory-card button {
+    width: 100%;
+  }
+
+  .selected-car-visual {
+    padding:
+        5px
+        0;
+  }
+
+  .customization-actions {
+    flex-direction: column;
+  }
+
+  .customization-actions
+  .button {
     width: 100%;
   }
 }

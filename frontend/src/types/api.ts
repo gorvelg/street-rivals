@@ -35,6 +35,8 @@ export interface Car {
     losses?: number
     duelsPlayed?: number
     winRate?: number
+    bodyStyle: CarBodyStyle
+    wheelStyle: CarWheelStyle
 }
 
 export type CardKind =
@@ -49,7 +51,21 @@ export type EquipmentSlot =
     | 'gearbox'
     | 'chassis'
     | 'aero'
-
+export type CarBodyStyle =
+    | 'compact_01'
+    | 'hatch_01'
+    | 'coupe_01'
+    | 'coupe_02'
+    | 'muscle_01'
+    | 'roadster_01'
+    | 'sedan_01'
+    | 'rally_01'
+    | 'retro_01'
+    | 'super_01'
+export type CarWheelStyle =
+    | 'street_01'
+    | 'five_spoke'
+    | 'multi_spoke'
 export interface AppliedCard {
     carCardId: number
     cardId: number

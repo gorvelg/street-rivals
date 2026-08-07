@@ -20,6 +20,8 @@ import AdminCardDetailView from '../views/admin/AdminCardDetailView.vue'
 import AdminEventsView from '../views/admin/AdminEventsView.vue'
 import AdminGameSettingsView from '../views/admin/AdminGameSettingsView.vue'
 
+import CarVisualTestView from "../views/CarVisualTestView.vue";
+
 const routes: RouteRecordRaw[] = [
     {
         path: '/',
@@ -49,6 +51,14 @@ const routes: RouteRecordRaw[] = [
         path: '/duel',
         name: 'duel',
         component: DuelView,
+        meta: {
+            requiresAuth: true,
+        },
+    },
+    {
+        path: '/test',
+        name: 'test',
+        component: CarVisualTestView,
         meta: {
             requiresAuth: true,
         },

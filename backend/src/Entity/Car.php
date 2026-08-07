@@ -11,6 +11,8 @@ use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
 use App\Dto\CarStatsOutput;
 use App\Dto\MatchmakingOpponentOutput;
+use App\Enum\CarBodyStyle;
+use App\Enum\CarWheelStyle;
 use App\Repository\CarRepository;
 use App\State\CarProcessor;
 use App\State\CarStatsProvider;
@@ -77,28 +79,89 @@ class Car
     private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'cars')]
-    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(
+        nullable: false,
+        onDelete: 'CASCADE',
+    )]
     private ?User $user = null;
 
-    #[ORM\Column(name: 'pilot_name', length: 32)]
-    #[Groups(['car:read', 'car:write'])]
-    #[Assert\NotBlank(message: 'Le nom du pilote est obligatoire.')]
+    #[ORM\Column(
+        name: 'pilot_name',
+        length: 32,
+    )]
+    #[Groups([
+        'car:read',
+        'car:write',
+    ])]
+    #[Assert\NotBlank(
+        message: 'Le nom du pilote est obligatoire.',
+    )]
     #[Assert\Length(
         min: 3,
         max: 32,
         minMessage: 'Le nom du pilote doit contenir au moins {{ limit }} caractères.',
-        maxMessage: 'Le nom du pilote ne peut pas dépasser {{ limit }} caractères.'
+        maxMessage: 'Le nom du pilote ne peut pas dépasser {{ limit }} caractères.',
     )]
     private ?string $pilotName = null;
 
+    /*
+     * Couleur principale de la carrosserie.
+     */
     #[ORM\Column(length: 7)]
-    #[Groups(['car:read', 'car:write'])]
-    #[Assert\NotBlank(message: 'La couleur est obligatoire.')]
+    #[Groups([
+        'car:read',
+        'car:write',
+    ])]
+    #[Assert\NotBlank(
+        message: 'La couleur est obligatoire.',
+    )]
     #[Assert\Regex(
         pattern: '/^#[0-9A-Fa-f]{6}$/',
-        message: 'La couleur doit être au format hexadécimal, par exemple #FF0000.'
+        message: 'La couleur doit être au format hexadécimal, par exemple #FF0000.',
     )]
     private ?string $color = null;
+
+    /*
+     * Forme visuelle de la carrosserie.
+     *
+     * Purement cosmétique :
+     * aucun impact sur les statistiques.
+     */
+    #[ORM\Column(
+        name: 'body_style',
+        length: 32,
+        enumType: CarBodyStyle::class,
+        options: [
+            'default' => 'coupe_01',
+        ],
+    )]
+    #[Groups([
+        'car:read',
+        'car:write',
+    ])]
+    private CarBodyStyle $bodyStyle =
+        CarBodyStyle::COUPE_01;
+
+    /*
+     * Modèle visuel des jantes.
+     *
+     * Purement cosmétique :
+     * aucun impact sur les statistiques.
+     */
+    #[ORM\Column(
+        name: 'wheel_style',
+        length: 32,
+        enumType: CarWheelStyle::class,
+        options: [
+            'default' => 'street_01',
+        ],
+    )]
+    #[Groups([
+        'car:read',
+        'car:write',
+    ])]
+    private CarWheelStyle $wheelStyle =
+        CarWheelStyle::STREET_01;
 
     #[ORM\Column]
     #[Groups(['car:read'])]
@@ -128,15 +191,27 @@ class Car
     #[Groups(['car:read'])]
     private int $xp = 0;
 
-    #[ORM\Column(options: ['default' => 1000])]
+    #[ORM\Column(
+        options: [
+            'default' => 1000,
+        ],
+    )]
     #[Groups(['car:read'])]
     private int $rating = 1000;
 
-    #[ORM\Column(options: ['default' => 0])]
+    #[ORM\Column(
+        options: [
+            'default' => 0,
+        ],
+    )]
     #[Groups(['car:read'])]
     private int $wins = 0;
 
-    #[ORM\Column(options: ['default' => 0])]
+    #[ORM\Column(
+        options: [
+            'default' => 0,
+        ],
+    )]
     #[Groups(['car:read'])]
     private int $losses = 0;
 
@@ -166,8 +241,9 @@ class Car
         return $this->user;
     }
 
-    public function setUser(User $user): static
-    {
+    public function setUser(
+        User $user,
+    ): static {
         $this->user = $user;
 
         return $this;
@@ -178,9 +254,11 @@ class Car
         return $this->pilotName;
     }
 
-    public function setPilotName(string $pilotName): static
-    {
-        $this->pilotName = trim($pilotName);
+    public function setPilotName(
+        string $pilotName,
+    ): static {
+        $this->pilotName =
+            trim($pilotName);
 
         return $this;
     }
@@ -190,9 +268,39 @@ class Car
         return $this->color;
     }
 
-    public function setColor(string $color): static
+    public function setColor(
+        string $color,
+    ): static {
+        $this->color =
+            strtoupper(trim($color));
+
+        return $this;
+    }
+
+    public function getBodyStyle(): CarBodyStyle
     {
-        $this->color = strtoupper($color);
+        return $this->bodyStyle;
+    }
+
+    public function setBodyStyle(
+        CarBodyStyle $bodyStyle,
+    ): static {
+        $this->bodyStyle =
+            $bodyStyle;
+
+        return $this;
+    }
+
+    public function getWheelStyle(): CarWheelStyle
+    {
+        return $this->wheelStyle;
+    }
+
+    public function setWheelStyle(
+        CarWheelStyle $wheelStyle,
+    ): static {
+        $this->wheelStyle =
+            $wheelStyle;
 
         return $this;
     }
@@ -202,8 +310,9 @@ class Car
         return $this->money;
     }
 
-    public function setMoney(int $money): static
-    {
+    public function setMoney(
+        int $money,
+    ): static {
         $this->money = $money;
 
         return $this;
@@ -214,8 +323,9 @@ class Car
         return $this->speed;
     }
 
-    public function setSpeed(int $speed): static
-    {
+    public function setSpeed(
+        int $speed,
+    ): static {
         $this->speed = $speed;
 
         return $this;
@@ -226,9 +336,11 @@ class Car
         return $this->acceleration;
     }
 
-    public function setAcceleration(int $acceleration): static
-    {
-        $this->acceleration = $acceleration;
+    public function setAcceleration(
+        int $acceleration,
+    ): static {
+        $this->acceleration =
+            $acceleration;
 
         return $this;
     }
@@ -238,8 +350,9 @@ class Car
         return $this->grip;
     }
 
-    public function setGrip(int $grip): static
-    {
+    public function setGrip(
+        int $grip,
+    ): static {
         $this->grip = $grip;
 
         return $this;
@@ -250,9 +363,11 @@ class Car
         return $this->solidity;
     }
 
-    public function setSolidity(int $solidity): static
-    {
-        $this->solidity = $solidity;
+    public function setSolidity(
+        int $solidity,
+    ): static {
+        $this->solidity =
+            $solidity;
 
         return $this;
     }
@@ -262,8 +377,9 @@ class Car
         return $this->level;
     }
 
-    public function setLevel(int $level): static
-    {
+    public function setLevel(
+        int $level,
+    ): static {
         $this->level = $level;
 
         return $this;
@@ -274,8 +390,9 @@ class Car
         return $this->xp;
     }
 
-    public function setXp(int $xp): static
-    {
+    public function setXp(
+        int $xp,
+    ): static {
         $this->xp = $xp;
 
         return $this;
@@ -293,20 +410,25 @@ class Car
 
     public function touch(): void
     {
-        $this->updatedAt = new \DateTimeImmutable();
+        $this->updatedAt =
+            new \DateTimeImmutable();
     }
 
     #[Groups(['car:read'])]
     public function getXpRequiredForNextLevel(): int
     {
         return self::BASE_XP_REQUIRED
-            + (($this->level - 1) * self::XP_INCREASE_PER_LEVEL);
+            + (
+                ($this->level - 1)
+                * self::XP_INCREASE_PER_LEVEL
+            );
     }
 
     #[Groups(['car:read'])]
     public function getXpProgressPercent(): float
     {
-        $requiredXp = $this->getXpRequiredForNextLevel();
+        $requiredXp =
+            $this->getXpRequiredForNextLevel();
 
         if ($requiredXp <= 0) {
             return 0.0;
@@ -314,12 +436,19 @@ class Car
 
         return min(
             100.0,
-            round(($this->xp / $requiredXp) * 100, 2)
+            round(
+                (
+                    $this->xp
+                    / $requiredXp
+                ) * 100,
+                2
+            )
         );
     }
 
-    public function addXp(int $amount): void
-    {
+    public function addXp(
+        int $amount,
+    ): void {
         if ($amount <= 0) {
             throw new \InvalidArgumentException(
                 'Le montant d’XP doit être supérieur à zéro.'
@@ -327,12 +456,14 @@ class Car
         }
 
         $this->xp += $amount;
+
         $this->touch();
     }
 
     public function canLevelUp(): bool
     {
-        return $this->xp >= $this->getXpRequiredForNextLevel();
+        return $this->xp
+            >= $this->getXpRequiredForNextLevel();
     }
 
     public function levelUp(): void
@@ -343,7 +474,8 @@ class Car
             );
         }
 
-        $requiredXp = $this->getXpRequiredForNextLevel();
+        $requiredXp =
+            $this->getXpRequiredForNextLevel();
 
         $this->xp -= $requiredXp;
         ++$this->level;
@@ -351,8 +483,9 @@ class Car
         $this->touch();
     }
 
-    public function addMoney(int $amount): void
-    {
+    public function addMoney(
+        int $amount,
+    ): void {
         if ($amount <= 0) {
             throw new \InvalidArgumentException(
                 'Le montant d’argent doit être supérieur à zéro.'
@@ -360,6 +493,7 @@ class Car
         }
 
         $this->money += $amount;
+
         $this->touch();
     }
 
@@ -381,47 +515,58 @@ class Car
     #[Groups(['car:read'])]
     public function getDuelsPlayed(): int
     {
-        return $this->wins + $this->losses;
+        return $this->wins
+            + $this->losses;
     }
 
     #[Groups(['car:read'])]
     public function getWinRate(): float
     {
-        $duelsPlayed = $this->getDuelsPlayed();
+        $duelsPlayed =
+            $this->getDuelsPlayed();
 
         if ($duelsPlayed === 0) {
             return 0.0;
         }
 
         return round(
-            ($this->wins / $duelsPlayed) * 100,
+            (
+                $this->wins
+                / $duelsPlayed
+            ) * 100,
             2
         );
     }
 
-    public function recordWin(int $ratingDelta): void
-    {
+    public function recordWin(
+        int $ratingDelta,
+    ): void {
         if ($ratingDelta < 0) {
             throw new \InvalidArgumentException(
                 'Le gain de classement ne peut pas être négatif.'
             );
         }
 
-        $this->rating += $ratingDelta;
+        $this->rating +=
+            $ratingDelta;
+
         ++$this->wins;
 
         $this->touch();
     }
 
-    public function recordLoss(int $ratingDelta): void
-    {
+    public function recordLoss(
+        int $ratingDelta,
+    ): void {
         if ($ratingDelta > 0) {
             throw new \InvalidArgumentException(
                 'La perte de classement ne peut pas être positive.'
             );
         }
 
-        $this->rating += $ratingDelta;
+        $this->rating +=
+            $ratingDelta;
+
         ++$this->losses;
 
         $this->touch();
