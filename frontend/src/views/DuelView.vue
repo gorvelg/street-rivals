@@ -7,7 +7,7 @@ import {
 } from 'vue'
 import { useRouter } from 'vue-router'
 import CardChoicePanel from '../components/CardChoicePanel.vue'
-import ReplayEventCard from '../components/ReplayEventCard.vue'
+import DuelNarrativeTerminal from '../components/DuelNarrativeTerminal.vue'
 import {
   ApiError,
   apiRequest,
@@ -611,19 +611,18 @@ onBeforeUnmount(() => {
           </p>
         </section>
 
-        <section class="replay-events">
-          <ReplayEventCard
-              v-for="event in visibleEvents"
-              :key="`${event.index}-${event.type}`"
-              :event="event"
-              :attacker-name="
-              duelStore.duel.attackerSnapshot.pilotName
-            "
-              :defender-name="
-              duelStore.duel.defenderSnapshot.pilotName
-            "
-          />
-        </section>
+        <DuelNarrativeTerminal
+            :events="visibleEvents"
+            :attacker-name="
+      duelStore.duel.attackerSnapshot.pilotName
+    "
+            :defender-name="
+      duelStore.duel.defenderSnapshot.pilotName
+    "
+            :replay-finished="replayFinished"
+            :winner-name="winnerName"
+            :final-gap="duelStore.duel.finalGap"
+        />
 
         <section
             v-if="replayFinished"
