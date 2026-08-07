@@ -6,7 +6,7 @@ import {
 
 import {
   CAR_BODY_DEFINITIONS,
-} from '../config/carBodies'
+} from '../cars/bodies'
 
 import type {
   CarBodyStyle,

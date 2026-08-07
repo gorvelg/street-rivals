@@ -27,7 +27,6 @@ import {
 import type {
   ApiCollection,
   Car,
-  CarBodyStyle,
   CarInventoryCard,
   CarStats,
   CarWheelStyle,
@@ -36,6 +35,10 @@ import type {
   MatchmakingOpponent,
   PendingDuel,
 } from '../types/api'
+
+import {
+  CAR_BODIES,
+} from '../cars/bodies'
 
 const router =
     useRouter()
@@ -111,52 +114,6 @@ const customizationWheelStyle =
     ref<CarWheelStyle>(
         'street_01',
     )
-
-const bodyStyles: Array<{
-  value: CarBodyStyle
-  label: string
-}> = [
-  {
-    value: 'compact_01',
-    label: 'Compacte sportive',
-  },
-  {
-    value: 'hatch_01',
-    label: 'Hot hatch',
-  },
-  {
-    value: 'coupe_01',
-    label: 'Coupé sportif',
-  },
-  {
-    value: 'coupe_02',
-    label: 'Coupé tuner',
-  },
-  {
-    value: 'muscle_01',
-    label: 'Muscle',
-  },
-  {
-    value: 'roadster_01',
-    label: 'Roadster',
-  },
-  {
-    value: 'sedan_01',
-    label: 'Berline sportive',
-  },
-  {
-    value: 'rally_01',
-    label: 'Rallye',
-  },
-  {
-    value: 'retro_01',
-    label: 'Coupé rétro',
-  },
-  {
-    value: 'super_01',
-    label: 'Supercar',
-  },
-]
 
 const wheelStyles: Array<{
   value: CarWheelStyle
@@ -1357,25 +1314,25 @@ onMounted(
               >
                 <button
                     v-for="
-                      body in
-                        bodyStyles
-                    "
+      body in
+        CAR_BODIES
+    "
                     :key="
-                      body.value
-                    "
+      body.code
+    "
                     type="button"
                     class="
-                      customization-option
-                    "
+      customization-option
+    "
                     :class="{
-                      'customization-option-selected':
-                        customizationBodyStyle
-                        === body.value,
-                    }"
+      'customization-option-selected':
+        customizationBodyStyle
+        === body.code,
+    }"
                     @click="
-                      customizationBodyStyle =
-                        body.value
-                    "
+      customizationBodyStyle =
+        body.code
+    "
                 >
                   {{ body.label }}
                 </button>
