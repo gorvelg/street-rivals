@@ -7,12 +7,13 @@ namespace App\Service;
 use App\Dto\CarStatsOutput;
 use App\Entity\Car;
 use App\Entity\CarCard;
+use App\Enum\NarrativeContext;
 use App\Model\DuelSimulationResult;
 use App\Repository\CarCardRepository;
 
 final class DuelSimulator
 {
-    public const ENGINE_VERSION = '1.1.0';
+    public const ENGINE_VERSION = '1.2.0';
 
     private const MAXIMUM_GAP_CHANGE = 5;
 
@@ -75,6 +76,7 @@ final class DuelSimulator
         private readonly DeterministicRandom $random,
         private readonly CarCardRepository $carCardRepository,
         private readonly CardEffectResolver $cardEffectResolver,
+        private readonly CardNarrativeService $cardNarrativeService,
     ) {
     }
 
@@ -91,16 +93,23 @@ final class DuelSimulator
 
         $seed ??= bin2hex(random_bytes(16));
 
-        $attackerStats = $this->statsCalculator->calculate($attacker);
-        $defenderStats = $this->statsCalculator->calculate($defender);
+        $attackerStats = $this->statsCalculator->calculate(
+            $attacker
+        );
 
-        $attackerActiveCards = $this->findActiveCards($attacker);
-        $defenderActiveCards = $this->findActiveCards($defender);
+        $defenderStats = $this->statsCalculator->calculate(
+            $defender
+        );
+
+        $attackerActiveCards =
+            $this->findActiveCards($attacker);
+
+        $defenderActiveCards =
+            $this->findActiveCards($defender);
 
         /*
-         * Nombre d’activations de chaque CarCard pendant ce duel.
-         *
-         * La clé correspond à l’identifiant de CarCard.
+         * Nombre d’activations de chaque CarCard
+         * pendant ce duel.
          */
         $attackerActivationCounts = [];
         $defenderActivationCounts = [];
@@ -108,82 +117,153 @@ final class DuelSimulator
         $gap = 0;
         $events = [];
 
-        foreach (self::EVENTS as $index => $eventDefinition) {
+        foreach (
+            self::EVENTS
+            as $index => $eventDefinition
+        ) {
             /*
-             * Scores avant application des cartes actives.
+             * Scores avant application
+             * des cartes actives.
              */
-            $attackerPermanentScore = $this->calculateBaseScore(
-                $attackerStats->effective,
-                $eventDefinition['weights']
-            );
+            $attackerPermanentScore =
+                $this->calculateBaseScore(
+                    $attackerStats->effective,
+                    $eventDefinition['weights']
+                );
 
-            $defenderPermanentScore = $this->calculateBaseScore(
-                $defenderStats->effective,
-                $eventDefinition['weights']
-            );
-
-            /*
-             * Les statistiques événementielles sont temporaires.
-             *
-             * Les statistiques réelles de la voiture ne sont pas modifiées.
-             */
-            $attackerEventStats = $attackerStats->effective;
-            $defenderEventStats = $defenderStats->effective;
-
-            $attackerTriggeredCards = $this->applyActiveCards(
-                activeCards: $attackerActiveCards,
-                eventType: $eventDefinition['type'],
-                eventStats: $attackerEventStats,
-                activationCounts: $attackerActivationCounts,
-            );
-
-            $defenderTriggeredCards = $this->applyActiveCards(
-                activeCards: $defenderActiveCards,
-                eventType: $eventDefinition['type'],
-                eventStats: $defenderEventStats,
-                activationCounts: $defenderActivationCounts,
-            );
+            $defenderPermanentScore =
+                $this->calculateBaseScore(
+                    $defenderStats->effective,
+                    $eventDefinition['weights']
+                );
 
             /*
-             * Scores après application des cartes actives.
+             * Les statistiques événementielles
+             * sont temporaires.
              */
-            $attackerBaseScore = $this->calculateBaseScore(
-                $attackerEventStats,
-                $eventDefinition['weights']
-            );
+            $attackerEventStats =
+                $attackerStats->effective;
 
-            $defenderBaseScore = $this->calculateBaseScore(
-                $defenderEventStats,
-                $eventDefinition['weights']
-            );
+            $defenderEventStats =
+                $defenderStats->effective;
+
+            $attackerTriggeredCards =
+                $this->applyActiveCards(
+                    activeCards:
+                    $attackerActiveCards,
+
+                    eventType:
+                    $eventDefinition['type'],
+
+                    eventStats:
+                    $attackerEventStats,
+
+                    activationCounts:
+                    $attackerActivationCounts,
+
+                    pilotName:
+                    $attackerStats->pilotName,
+
+                    opponentName:
+                    $defenderStats->pilotName,
+
+                    duelSeed:
+                    $seed,
+
+                    eventIndex:
+                    $index,
+
+                    side:
+                    'attacker',
+                );
+
+            $defenderTriggeredCards =
+                $this->applyActiveCards(
+                    activeCards:
+                    $defenderActiveCards,
+
+                    eventType:
+                    $eventDefinition['type'],
+
+                    eventStats:
+                    $defenderEventStats,
+
+                    activationCounts:
+                    $defenderActivationCounts,
+
+                    pilotName:
+                    $defenderStats->pilotName,
+
+                    opponentName:
+                    $attackerStats->pilotName,
+
+                    duelSeed:
+                    $seed,
+
+                    eventIndex:
+                    $index,
+
+                    side:
+                    'defender',
+                );
+
+            /*
+             * Scores après application
+             * des cartes actives.
+             */
+            $attackerBaseScore =
+                $this->calculateBaseScore(
+                    $attackerEventStats,
+                    $eventDefinition['weights']
+                );
+
+            $defenderBaseScore =
+                $this->calculateBaseScore(
+                    $defenderEventStats,
+                    $eventDefinition['weights']
+                );
 
             $attackerActiveBonus =
-                $attackerBaseScore - $attackerPermanentScore;
+                $attackerBaseScore
+                - $attackerPermanentScore;
 
             $defenderActiveBonus =
-                $defenderBaseScore - $defenderPermanentScore;
+                $defenderBaseScore
+                - $defenderPermanentScore;
 
-            $attackerRandomModifier = $this->random->integer(
-                seed: $seed,
-                scope: sprintf('event:%d:attacker', $index),
-                minimum: -2,
-                maximum: 2,
-            );
+            $attackerRandomModifier =
+                $this->random->integer(
+                    seed: $seed,
+                    scope: sprintf(
+                        'event:%d:attacker',
+                        $index
+                    ),
+                    minimum: -2,
+                    maximum: 2,
+                );
 
-            $defenderRandomModifier = $this->random->integer(
-                seed: $seed,
-                scope: sprintf('event:%d:defender', $index),
-                minimum: -2,
-                maximum: 2,
-            );
+            $defenderRandomModifier =
+                $this->random->integer(
+                    seed: $seed,
+                    scope: sprintf(
+                        'event:%d:defender',
+                        $index
+                    ),
+                    minimum: -2,
+                    maximum: 2,
+                );
 
             $attackerScore =
-                $attackerBaseScore + $attackerRandomModifier;
+                $attackerBaseScore
+                + $attackerRandomModifier;
 
             $defenderScore =
-                $defenderBaseScore + $defenderRandomModifier;
+                $defenderBaseScore
+                + $defenderRandomModifier;
 
-            $rawDifference = $attackerScore - $defenderScore;
+            $rawDifference =
+                $attackerScore
+                - $defenderScore;
 
             $gapChange = max(
                 -self::MAXIMUM_GAP_CHANGE,
@@ -197,28 +277,63 @@ final class DuelSimulator
 
             $events[] = [
                 'index' => $index + 1,
-                'type' => $eventDefinition['type'],
-                'label' => $eventDefinition['label'],
+                'type' =>
+                    $eventDefinition['type'],
+
+                'label' =>
+                    $eventDefinition['label'],
+
                 'attacker' => [
-                    'permanentScore' => $attackerPermanentScore,
-                    'activeCardBonus' => $attackerActiveBonus,
-                    'baseScore' => $attackerBaseScore,
-                    'randomModifier' => $attackerRandomModifier,
-                    'score' => $attackerScore,
-                    'triggeredCards' => $attackerTriggeredCards,
+                    'permanentScore' =>
+                        $attackerPermanentScore,
+
+                    'activeCardBonus' =>
+                        $attackerActiveBonus,
+
+                    'baseScore' =>
+                        $attackerBaseScore,
+
+                    'randomModifier' =>
+                        $attackerRandomModifier,
+
+                    'score' =>
+                        $attackerScore,
+
+                    'triggeredCards' =>
+                        $attackerTriggeredCards,
                 ],
+
                 'defender' => [
-                    'permanentScore' => $defenderPermanentScore,
-                    'activeCardBonus' => $defenderActiveBonus,
-                    'baseScore' => $defenderBaseScore,
-                    'randomModifier' => $defenderRandomModifier,
-                    'score' => $defenderScore,
-                    'triggeredCards' => $defenderTriggeredCards,
+                    'permanentScore' =>
+                        $defenderPermanentScore,
+
+                    'activeCardBonus' =>
+                        $defenderActiveBonus,
+
+                    'baseScore' =>
+                        $defenderBaseScore,
+
+                    'randomModifier' =>
+                        $defenderRandomModifier,
+
+                    'score' =>
+                        $defenderScore,
+
+                    'triggeredCards' =>
+                        $defenderTriggeredCards,
                 ],
-                'rawDifference' => $rawDifference,
-                'gapChange' => $gapChange,
-                'gapAfter' => $gap,
-                'leader' => $this->resolveLeader($gap),
+
+                'rawDifference' =>
+                    $rawDifference,
+
+                'gapChange' =>
+                    $gapChange,
+
+                'gapAfter' =>
+                    $gap,
+
+                'leader' =>
+                    $this->resolveLeader($gap),
             ];
         }
 
@@ -226,42 +341,63 @@ final class DuelSimulator
          * Il faut toujours un gagnant.
          */
         if ($gap === 0) {
-            $photoFinishWinner = $this->random->integer(
-                seed: $seed,
-                scope: 'photo_finish',
-                minimum: 0,
-                maximum: 1,
-            );
+            $photoFinishWinner =
+                $this->random->integer(
+                    seed: $seed,
+                    scope: 'photo_finish',
+                    minimum: 0,
+                    maximum: 1,
+                );
 
-            $gap = $photoFinishWinner === 1 ? 1 : -1;
+            $gap =
+                $photoFinishWinner === 1
+                    ? 1
+                    : -1;
 
             $events[] = [
-                'index' => count($events) + 1,
-                'type' => 'photo_finish',
-                'label' => 'Photo-finish',
-                'gapChange' => $gap,
-                'gapAfter' => $gap,
-                'leader' => $this->resolveLeader($gap),
+                'index' =>
+                    count($events) + 1,
+
+                'type' =>
+                    'photo_finish',
+
+                'label' =>
+                    'Photo-finish',
+
+                'gapChange' =>
+                    $gap,
+
+                'gapAfter' =>
+                    $gap,
+
+                'leader' =>
+                    $this->resolveLeader($gap),
             ];
         }
 
-        $winnerCar = $gap > 0
-            ? $attacker
-            : $defender;
+        $winnerCar =
+            $gap > 0
+                ? $attacker
+                : $defender;
 
-        $attackerSnapshot = $this->createSnapshot(
-            car: $attacker,
-            stats: $attackerStats,
-            activeCards: $attackerActiveCards,
-        );
+        $attackerSnapshot =
+            $this->createSnapshot(
+                car: $attacker,
+                stats: $attackerStats,
+                activeCards:
+                $attackerActiveCards,
+            );
 
-        $defenderSnapshot = $this->createSnapshot(
-            car: $defender,
-            stats: $defenderStats,
-            activeCards: $defenderActiveCards,
-        );
+        $defenderSnapshot =
+            $this->createSnapshot(
+                car: $defender,
+                stats: $defenderStats,
+                activeCards:
+                $defenderActiveCards,
+            );
 
-        $winnerCarId = $winnerCar->getId();
+        $winnerCarId =
+            $winnerCar->getId();
 
         if ($winnerCarId === null) {
             throw new \LogicException(
@@ -270,11 +406,20 @@ final class DuelSimulator
         }
 
         $replayData = [
-            'engineVersion' => self::ENGINE_VERSION,
-            'randomSeed' => $seed,
-            'events' => $events,
-            'finalGap' => $gap,
-            'winnerCarId' => $winnerCarId,
+            'engineVersion' =>
+                self::ENGINE_VERSION,
+
+            'randomSeed' =>
+                $seed,
+
+            'events' =>
+                $events,
+
+            'finalGap' =>
+                $gap,
+
+            'winnerCarId' =>
+                $winnerCarId,
         ];
 
         return new DuelSimulationResult(
@@ -289,19 +434,23 @@ final class DuelSimulator
     }
 
     /**
-     * Récupère les cartes actives équipées et leur effet au bon palier.
-     *
      * @return list<array{
      *     carCard: CarCard,
      *     effect: array<string, mixed>
      * }>
      */
-    private function findActiveCards(Car $car): array
-    {
+    private function findActiveCards(
+        Car $car,
+    ): array {
         $activeCards = [];
 
-        foreach ($this->carCardRepository->findEquippedByCar($car) as $carCard) {
-            $card = $carCard->getCard();
+        foreach (
+            $this->carCardRepository
+                ->findEquippedByCar($car)
+            as $carCard
+        ) {
+            $card =
+                $carCard->getCard();
 
             if ($card === null) {
                 continue;
@@ -315,13 +464,14 @@ final class DuelSimulator
                 continue;
             }
 
-            $effect = $this->cardEffectResolver->resolve($carCard);
+            $effect =
+                $this->cardEffectResolver
+                    ->resolve($carCard);
 
-            /*
-             * Les futurs types de cartes actives pourront être
-             * traités dans d’autres méthodes.
-             */
-            if (($effect['kind'] ?? null) !== 'event_stat_bonus') {
+            if (
+                ($effect['kind'] ?? null)
+                !== 'event_stat_bonus'
+            ) {
                 continue;
             }
 
@@ -331,8 +481,11 @@ final class DuelSimulator
             );
 
             $activeCards[] = [
-                'carCard' => $carCard,
-                'effect' => $effect,
+                'carCard' =>
+                    $carCard,
+
+                'effect' =>
+                    $effect,
             ];
         }
 
@@ -340,15 +493,13 @@ final class DuelSimulator
     }
 
     /**
-     * Applique les cartes correspondant à l’événement actuel.
-     *
      * @param list<array{
      *     carCard: CarCard,
      *     effect: array<string, mixed>
      * }> $activeCards
      *
      * @param array<string, int> $eventStats
-     * @param array<int, int>    $activationCounts
+     * @param array<int, int> $activationCounts
      *
      * @return list<array<string, mixed>>
      */
@@ -357,18 +508,35 @@ final class DuelSimulator
         string $eventType,
         array &$eventStats,
         array &$activationCounts,
+        string $pilotName,
+        string $opponentName,
+        string $duelSeed,
+        int $eventIndex,
+        string $side,
     ): array {
         $triggeredCards = [];
 
-        foreach ($activeCards as $activeCard) {
-            $carCard = $activeCard['carCard'];
-            $effect = $activeCard['effect'];
+        $narrativeContext =
+            $this->resolveNarrativeContext(
+                $eventType
+            );
 
-            if (($effect['event'] ?? null) !== $eventType) {
+        foreach ($activeCards as $activeCard) {
+            $carCard =
+                $activeCard['carCard'];
+
+            $effect =
+                $activeCard['effect'];
+
+            if (
+                ($effect['event'] ?? null)
+                !== $eventType
+            ) {
                 continue;
             }
 
-            $carCardId = $carCard->getId();
+            $carCardId =
+                $carCard->getId();
 
             if ($carCardId === null) {
                 throw new \LogicException(
@@ -376,36 +544,154 @@ final class DuelSimulator
                 );
             }
 
-            $maxActivations = (int) ($effect['maxActivations'] ?? 1);
-            $currentActivations = $activationCounts[$carCardId] ?? 0;
+            $maxActivations =
+                (int) (
+                    $effect['maxActivations']
+                    ?? 1
+                );
 
-            if ($currentActivations >= $maxActivations) {
+            $currentActivations =
+                $activationCounts[$carCardId]
+                ?? 0;
+
+            if (
+                $currentActivations
+                >= $maxActivations
+            ) {
                 continue;
             }
 
-            $stat = (string) $effect['stat'];
-            $value = (int) $effect['value'];
+            $stat =
+                (string) $effect['stat'];
 
-            $eventStats[$stat] += $value;
+            $value =
+                (int) $effect['value'];
 
-            $activationCounts[$carCardId] = $currentActivations + 1;
+            $eventStats[$stat] +=
+                $value;
 
-            $card = $carCard->getCard();
+            $activationNumber =
+                $currentActivations + 1;
+
+            $activationCounts[$carCardId] =
+                $activationNumber;
+
+            $card =
+                $carCard->getCard();
+
+            if ($card === null) {
+                throw new \LogicException(
+                    'La carte active est introuvable.'
+                );
+            }
+
+            /*
+             * La narration est générée MAINTENANT,
+             * pendant la simulation.
+             *
+             * Les lignes sont ensuite stockées
+             * dans replayData avec le reste du duel.
+             */
+            $narrativeLines =
+                $this->cardNarrativeService
+                    ->buildCardLines(
+                        card: $card,
+
+                        pilotName:
+                        $pilotName,
+
+                        opponentName:
+                        $opponentName,
+
+                        context:
+                        $narrativeContext,
+
+                        value:
+                        $value,
+
+                        stat:
+                        $stat,
+
+                        seed:
+                        sprintf(
+                            '%s:event:%d:%s:car-card:%d:activation:%d',
+                            $duelSeed,
+                            $eventIndex,
+                            $side,
+                            $carCardId,
+                            $activationNumber,
+                        ),
+                    );
 
             $triggeredCards[] = [
-                'carCardId' => $carCardId,
-                'cardId' => $card?->getId(),
-                'code' => $card?->getCode(),
-                'name' => $card?->getName(),
-                'tier' => $carCard->getTier(),
-                'stat' => $stat,
-                'value' => $value,
-                'activationNumber' => $currentActivations + 1,
-                'maxActivations' => $maxActivations,
+                'carCardId' =>
+                    $carCardId,
+
+                'cardId' =>
+                    $card->getId(),
+
+                'code' =>
+                    $card->getCode(),
+
+                'name' =>
+                    $card->getName(),
+
+                'tier' =>
+                    $carCard->getTier(),
+
+                'stat' =>
+                    $stat,
+
+                'value' =>
+                    $value,
+
+                'activationNumber' =>
+                    $activationNumber,
+
+                'maxActivations' =>
+                    $maxActivations,
+
+                /*
+                 * Nouveau en moteur 1.2.0
+                 */
+                'narrativeLines' =>
+                    $narrativeLines,
             ];
         }
 
         return $triggeredCards;
+    }
+
+    private function resolveNarrativeContext(
+        string $eventType,
+    ): NarrativeContext {
+        return match ($eventType) {
+            'start' =>
+            NarrativeContext::START,
+
+            'straight' =>
+            NarrativeContext::STRAIGHT,
+
+            /*
+             * Une chicane est considérée comme
+             * un contexte de pilotage en virage.
+             */
+            'turn',
+            'chicane' =>
+            NarrativeContext::TURN,
+
+            /*
+             * Le sprint final privilégie
+             * vitesse + accélération.
+             * Pour la narration des capacités,
+             * on le rapproche d'une ligne droite.
+             */
+            'final_sprint' =>
+            NarrativeContext::STRAIGHT,
+
+            default =>
+            NarrativeContext::ANY,
+        };
     }
 
     /**
@@ -415,47 +701,81 @@ final class DuelSimulator
         CarCard $carCard,
         array $effect,
     ): void {
-        $cardName = $carCard->getCard()?->getName() ?? 'Carte inconnue';
+        $cardName =
+            $carCard->getCard()?->getName()
+            ?? 'Carte inconnue';
 
-        $event = $effect['event'] ?? null;
-        $stat = $effect['stat'] ?? null;
-        $value = $effect['value'] ?? null;
-        $maxActivations = $effect['maxActivations'] ?? 1;
+        $event =
+            $effect['event']
+            ?? null;
 
-        if (!is_string($event) || $event === '') {
-            throw new \LogicException(sprintf(
-                'L’événement de la carte "%s" est invalide.',
-                $cardName
-            ));
+        $stat =
+            $effect['stat']
+            ?? null;
+
+        $value =
+            $effect['value']
+            ?? null;
+
+        $maxActivations =
+            $effect['maxActivations']
+            ?? 1;
+
+        if (
+            !is_string($event)
+            || $event === ''
+        ) {
+            throw new \LogicException(
+                sprintf(
+                    'L’événement de la carte "%s" est invalide.',
+                    $cardName
+                )
+            );
         }
 
         if (
             !is_string($stat)
-            || !in_array($stat, self::AVAILABLE_STATS, true)
+            || !in_array(
+                $stat,
+                self::AVAILABLE_STATS,
+                true
+            )
         ) {
-            throw new \LogicException(sprintf(
-                'La statistique de la carte "%s" est invalide.',
-                $cardName
-            ));
+            throw new \LogicException(
+                sprintf(
+                    'La statistique de la carte "%s" est invalide.',
+                    $cardName
+                )
+            );
         }
 
-        if (!is_int($value) && !is_float($value)) {
-            throw new \LogicException(sprintf(
-                'La valeur de la carte "%s" est invalide.',
-                $cardName
-            ));
+        if (
+            !is_int($value)
+            && !is_float($value)
+        ) {
+            throw new \LogicException(
+                sprintf(
+                    'La valeur de la carte "%s" est invalide.',
+                    $cardName
+                )
+            );
         }
 
-        if (!is_int($maxActivations) || $maxActivations < 1) {
-            throw new \LogicException(sprintf(
-                'Le nombre maximal d’activations de la carte "%s" est invalide.',
-                $cardName
-            ));
+        if (
+            !is_int($maxActivations)
+            || $maxActivations < 1
+        ) {
+            throw new \LogicException(
+                sprintf(
+                    'Le nombre maximal d’activations de la carte "%s" est invalide.',
+                    $cardName
+                )
+            );
         }
     }
 
     /**
-     * @param array<string, int>   $effectiveStats
+     * @param array<string, int> $effectiveStats
      * @param array<string, float> $weights
      */
     private function calculateBaseScore(
@@ -464,26 +784,44 @@ final class DuelSimulator
     ): int {
         $score = 0.0;
 
-        foreach ($weights as $stat => $weight) {
-            if (!array_key_exists($stat, $effectiveStats)) {
-                throw new \LogicException(sprintf(
-                    'La statistique "%s" est absente.',
-                    $stat
-                ));
+        foreach (
+            $weights
+            as $stat => $weight
+        ) {
+            if (
+                !array_key_exists(
+                    $stat,
+                    $effectiveStats
+                )
+            ) {
+                throw new \LogicException(
+                    sprintf(
+                        'La statistique "%s" est absente.',
+                        $stat
+                    )
+                );
             }
 
-            $score += $effectiveStats[$stat] * $weight;
+            $score +=
+                $effectiveStats[$stat]
+                * $weight;
         }
 
         return (int) round($score);
     }
 
-    private function resolveLeader(int $gap): string
-    {
+    private function resolveLeader(
+        int $gap,
+    ): string {
         return match (true) {
-            $gap > 0 => 'attacker',
-            $gap < 0 => 'defender',
-            default => 'tie',
+            $gap > 0 =>
+            'attacker',
+
+            $gap < 0 =>
+            'defender',
+
+            default =>
+            'tie',
         };
     }
 
@@ -501,31 +839,64 @@ final class DuelSimulator
         array $activeCards,
     ): array {
         return [
-            'carId' => $stats->carId,
-            'pilotName' => $stats->pilotName,
-            'color' => $car->getColor(),
-            'level' => $stats->level,
-            'base' => $stats->base,
-            'bonuses' => $stats->bonuses,
-            'effective' => $stats->effective,
-            'passiveCards' => $stats->appliedCards,
-            'activeCards' => array_map(
-                static function (array $activeCard): array {
-                    /** @var CarCard $carCard */
-                    $carCard = $activeCard['carCard'];
-                    $card = $carCard->getCard();
+            'carId' =>
+                $stats->carId,
 
-                    return [
-                        'carCardId' => $carCard->getId(),
-                        'cardId' => $card?->getId(),
-                        'code' => $card?->getCode(),
-                        'name' => $card?->getName(),
-                        'tier' => $carCard->getTier(),
-                        'effect' => $activeCard['effect'],
-                    ];
-                },
-                $activeCards
-            ),
+            'pilotName' =>
+                $stats->pilotName,
+
+            'color' =>
+                $car->getColor(),
+
+            'level' =>
+                $stats->level,
+
+            'base' =>
+                $stats->base,
+
+            'bonuses' =>
+                $stats->bonuses,
+
+            'effective' =>
+                $stats->effective,
+
+            'passiveCards' =>
+                $stats->appliedCards,
+
+            'activeCards' =>
+                array_map(
+                    static function (
+                        array $activeCard,
+                    ): array {
+                        /** @var CarCard $carCard */
+                        $carCard =
+                            $activeCard['carCard'];
+
+                        $card =
+                            $carCard->getCard();
+
+                        return [
+                            'carCardId' =>
+                                $carCard->getId(),
+
+                            'cardId' =>
+                                $card?->getId(),
+
+                            'code' =>
+                                $card?->getCode(),
+
+                            'name' =>
+                                $card?->getName(),
+
+                            'tier' =>
+                                $carCard->getTier(),
+
+                            'effect' =>
+                                $activeCard['effect'],
+                        ];
+                    },
+                    $activeCards
+                ),
         ];
     }
 }

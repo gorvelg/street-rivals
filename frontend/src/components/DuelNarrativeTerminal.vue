@@ -8,20 +8,19 @@ import {
 
 import type {
   DuelEvent,
+  DuelEventSide,
+  NarrativeLineType,
 } from '../types/api'
-
-type EventSide =
-    NonNullable<DuelEvent['attacker']>
-
-type TriggeredCard =
-    NonNullable<EventSide['triggeredCards']>[number]
 
 interface TerminalLine {
   id: string
+
   type:
       | 'section'
       | 'action'
       | 'card'
+      | 'cardEffect'
+      | 'reaction'
       | 'status'
       | 'result'
       | 'separator'
@@ -39,9 +38,19 @@ type EventContext =
     | 'start'
     | 'straight'
     | 'turn'
+    | 'chicane'
+    | 'finalSprint'
     | 'braking'
     | 'acceleration'
+    | 'photoFinish'
     | 'other'
+
+type Performance =
+    | 'dominant'
+    | 'good'
+    | 'even'
+    | 'poor'
+    | 'bad'
 
 const props = defineProps<{
   events: DuelEvent[]
@@ -76,18 +85,43 @@ function buildEventLines(
 ): TerminalLine[] {
   const result: TerminalLine[] = []
 
-  const attackerScore =
-      getScore(event.attacker)
-
-  const defenderScore =
-      getScore(event.defender)
-
   result.push({
     id: `${event.index}-section`,
     type: 'section',
     text: eventTitle(event),
   })
 
+  /*
+   * Le photo-finish généré par le backend
+   * ne contient pas de scores attaquant/défenseur.
+   */
+  if (
+      event.type === 'photo_finish'
+      || (
+          event.attacker === undefined
+          && event.defender === undefined
+      )
+  ) {
+    result.push({
+      id: `${event.index}-photo-finish`,
+      type: 'status',
+      tone: 'important',
+      text:
+          'Les deux voitures franchissent la ligne pratiquement ensemble. La photo doit les départager !',
+    })
+
+    return result
+  }
+
+  const attackerScore =
+      getScore(event.attacker)
+
+  const defenderScore =
+      getScore(event.defender)
+
+  /*
+   * Attaquant
+   */
   result.push({
     id: `${event.index}-attacker`,
     type: 'action',
@@ -95,7 +129,6 @@ function buildEventLines(
     text: buildActionText(
         props.attackerName,
         event,
-        event.attacker,
         attackerScore,
         defenderScore,
         'attacker',
@@ -115,6 +148,9 @@ function buildEventLines(
       event.attacker,
   )
 
+  /*
+   * Défenseur
+   */
   result.push({
     id: `${event.index}-defender`,
     type: 'action',
@@ -122,7 +158,6 @@ function buildEventLines(
     text: buildActionText(
         props.defenderName,
         event,
-        event.defender,
         defenderScore,
         attackerScore,
         'defender',
@@ -142,6 +177,9 @@ function buildEventLines(
       event.defender,
   )
 
+  /*
+   * Évolution de la course.
+   */
   const status =
       buildGapNarration(event)
 
@@ -160,7 +198,6 @@ function buildEventLines(
 function buildActionText(
     pilotName: string,
     event: DuelEvent,
-    side: EventSide | undefined,
     ownScore: number,
     opponentScore: number,
     sideName: 'attacker' | 'defender',
@@ -174,12 +211,18 @@ function buildActionText(
   const performance =
       getPerformance(difference)
 
+  /*
+   * Sélection déterministe.
+   *
+   * Le même événement gardera toujours
+   * la même formulation lors d'un replay.
+   */
   const seed =
       event.index
       + (
           sideName === 'attacker'
               ? 0
-              : 11
+              : 17
       )
 
   const phrase =
@@ -189,40 +232,33 @@ function buildActionText(
           seed,
       )
 
-  return `${pilotName} ${phrase} : ${formatSigned(ownScore)}`
+  return (
+      `${pilotName} ${phrase}` +
+      ` : ${formatSigned(ownScore)}`
+  )
 }
 
 function getActionPhrase(
     context: EventContext,
-    performance:
-        | 'dominant'
-        | 'good'
-        | 'even'
-        | 'poor'
-        | 'bad',
+    performance: Performance,
     seed: number,
 ): string {
-  const phrases =
+  return pick(
       getPhrasePool(
           context,
           performance,
-      )
-
-  return pick(
-      phrases,
+      ),
       seed,
   )
 }
 
 function getPhrasePool(
     context: EventContext,
-    performance:
-        | 'dominant'
-        | 'good'
-        | 'even'
-        | 'poor'
-        | 'bad',
-): string[] {
+    performance: Performance,
+): readonly string[] {
+  /*
+   * DÉPART
+   */
   if (context === 'start') {
     switch (performance) {
       case 'dominant':
@@ -230,6 +266,7 @@ function getPhrasePool(
           's’arrache de la grille',
           'réussit un départ canon',
           'bondit dès l’extinction des feux',
+          'jaillit de la ligne de départ',
         ]
 
       case 'good':
@@ -237,6 +274,7 @@ function getPhrasePool(
           'réagit parfaitement au départ',
           's’élance très proprement',
           'prend un excellent envol',
+          'trouve immédiatement de la motricité',
         ]
 
       case 'even':
@@ -244,6 +282,7 @@ function getPhrasePool(
           's’élance sans perdre une seconde',
           'reste parfaitement dans le rythme',
           'prend un départ propre',
+          'reste immédiatement au contact',
         ]
 
       case 'poor':
@@ -251,6 +290,7 @@ function getPhrasePool(
           'patine légèrement au départ',
           'perd quelques mètres au démarrage',
           'doit déjà courir après son adversaire',
+          'manque légèrement son envol',
         ]
 
       case 'bad':
@@ -258,10 +298,14 @@ function getPhrasePool(
           'reste scotché quelques instants',
           'rate complètement son envol',
           'se fait surprendre au départ',
+          'laisse immédiatement filer son adversaire',
         ]
     }
   }
 
+  /*
+   * LIGNE DROITE
+   */
   if (context === 'straight') {
     switch (performance) {
       case 'dominant':
@@ -270,6 +314,7 @@ function getPhrasePool(
           'déchaîne toute la puissance du moteur',
           'avale la ligne droite',
           'transforme la ligne droite en piste de décollage',
+          'fait rugir le moteur et disparaît vers l’horizon',
         ]
 
       case 'good':
@@ -278,6 +323,7 @@ function getPhrasePool(
           'fait parler la puissance',
           'gagne rapidement de la vitesse',
           'allonge parfaitement ses rapports',
+          'profite pleinement de sa vitesse de pointe',
         ]
 
       case 'even':
@@ -286,6 +332,7 @@ function getPhrasePool(
           'maintient la pression',
           'accélère sans rien lâcher',
           'reste dans l’aspiration',
+          'refuse de céder le moindre mètre',
         ]
 
       case 'poor':
@@ -294,6 +341,7 @@ function getPhrasePool(
           'manque légèrement de vitesse de pointe',
           's’accroche dans la ligne droite',
           'voit son adversaire prendre quelques mètres',
+          'cherche désespérément un peu plus de vitesse',
         ]
 
       case 'bad':
@@ -302,10 +350,14 @@ function getPhrasePool(
           'semble manquer cruellement de puissance',
           'voit son adversaire s’échapper',
           'n’arrive pas à suivre le rythme',
+          'perd énormément de terrain à pleine vitesse',
         ]
     }
   }
 
+  /*
+   * VIRAGE
+   */
   if (context === 'turn') {
     switch (performance) {
       case 'dominant':
@@ -314,6 +366,7 @@ function getPhrasePool(
           'attaque le virage sans lever le pied',
           'enchaîne le virage avec une précision chirurgicale',
           'passe le virage à une vitesse impressionnante',
+          'frôle le point de corde sans perdre de vitesse',
         ]
 
       case 'good':
@@ -322,6 +375,7 @@ function getPhrasePool(
           'prend une trajectoire très propre',
           'attaque fort à l’entrée du virage',
           'ressort très vite du virage',
+          'place parfaitement sa voiture',
         ]
 
       case 'even':
@@ -330,6 +384,7 @@ function getPhrasePool(
           'tient parfaitement sa trajectoire',
           'passe le virage sans perdre de terrain',
           'reste au contact dans la courbe',
+          'garde la voiture parfaitement équilibrée',
         ]
 
       case 'poor':
@@ -338,6 +393,7 @@ function getPhrasePool(
           'doit lever le pied dans le virage',
           'manque un peu son point de corde',
           'perd quelques mètres dans la courbe',
+          'corrige légèrement sa trajectoire',
         ]
 
       case 'bad':
@@ -346,10 +402,110 @@ function getPhrasePool(
           'rate complètement sa trajectoire',
           'sort beaucoup trop large',
           'doit fortement ralentir pour garder la voiture sur la route',
+          'perd complètement le rythme dans la courbe',
         ]
     }
   }
 
+  /*
+   * CHICANE
+   */
+  if (context === 'chicane') {
+    switch (performance) {
+      case 'dominant':
+        return [
+          'avale la chicane sans presque ralentir',
+          'enchaîne les changements d’appui avec une précision folle',
+          'danse entre les vibreurs sans perdre de vitesse',
+          'traverse la chicane comme sur des rails',
+        ]
+
+      case 'good':
+        return [
+          'enchaîne proprement les changements d’appui',
+          'attaque franchement la chicane',
+          'se faufile parfaitement entre les vibreurs',
+          'garde un excellent rythme dans la chicane',
+        ]
+
+      case 'even':
+        return [
+          'reste propre dans la chicane',
+          'enchaîne sans perdre de terrain',
+          'reste parfaitement au contact',
+          'contrôle ses changements d’appui',
+        ]
+
+      case 'poor':
+        return [
+          'perd un peu de temps dans la chicane',
+          'doit corriger sa trajectoire entre les vibreurs',
+          'manque de fluidité dans les changements d’appui',
+          'laisse quelques mètres dans la chicane',
+        ]
+
+      case 'bad':
+        return [
+          'se désunit complètement dans la chicane',
+          'saute maladroitement d’un vibreur à l’autre',
+          'perd énormément de vitesse dans la chicane',
+          'doit casser son rythme pour garder le contrôle',
+        ]
+    }
+  }
+
+  /*
+   * SPRINT FINAL
+   */
+  if (context === 'finalSprint') {
+    switch (performance) {
+      case 'dominant':
+        return [
+          'jette toutes ses forces dans le sprint final',
+          'libère toute la puissance disponible',
+          's’envole dans les derniers mètres',
+          'écrase l’accélérateur pour porter le coup de grâce',
+        ]
+
+      case 'good':
+        return [
+          'accélère fort vers la ligne',
+          'trouve encore de la vitesse dans les derniers mètres',
+          'pousse la voiture jusqu’à la limite',
+          'attaque pleinement le sprint final',
+        ]
+
+      case 'even':
+        return [
+          'donne tout jusqu’à la ligne',
+          'reste pied au plancher',
+          'refuse de céder dans les derniers mètres',
+          'reste collé à son adversaire',
+        ]
+
+      case 'poor':
+        return [
+          'tente de trouver une dernière accélération',
+          's’accroche jusqu’à la ligne',
+          'manque légèrement de puissance dans le sprint',
+          'voit la ligne arriver trop vite',
+        ]
+
+      case 'bad':
+        return [
+          'n’a plus rien à répondre dans le sprint final',
+          'voit son adversaire s’envoler vers l’arrivée',
+          'manque complètement de vitesse dans les derniers mètres',
+          'subit le sprint jusqu’à la ligne',
+        ]
+    }
+  }
+
+  /*
+   * FREINAGE
+   *
+   * Prévu pour les futurs événements.
+   */
   if (context === 'braking') {
     switch (performance) {
       case 'dominant':
@@ -389,6 +545,11 @@ function getPhrasePool(
     }
   }
 
+  /*
+   * RELANCE
+   *
+   * Prévu pour les futurs événements.
+   */
   if (context === 'acceleration') {
     switch (performance) {
       case 'dominant':
@@ -428,6 +589,9 @@ function getPhrasePool(
     }
   }
 
+  /*
+   * FALLBACK
+   */
   switch (performance) {
     case 'dominant':
       return [
@@ -468,12 +632,7 @@ function getPhrasePool(
 
 function getPerformance(
     difference: number,
-):
-    | 'dominant'
-    | 'good'
-    | 'even'
-    | 'poor'
-    | 'bad' {
+): Performance {
   if (difference >= 7) {
     return 'dominant'
   }
@@ -514,64 +673,126 @@ function scoreTone(
   return 'normal'
 }
 
+/*
+ * CARTES ACTIVES
+ *
+ * À partir du moteur 1.2.0, le frontend
+ * n'invente plus les textes propres aux cartes.
+ *
+ * Les phrases viennent directement du replay,
+ * donc du CardNarrativeService côté backend.
+ */
 function appendTriggeredCards(
     result: TerminalLine[],
     event: DuelEvent,
     pilotName: string,
-    sideName: string,
-    side: EventSide | undefined,
+    sideName: 'attacker' | 'defender',
+    side: DuelEventSide | undefined,
 ): void {
   const cards =
       side?.triggeredCards ?? []
 
   for (const card of cards) {
+    /*
+     * Nouveau format moteur 1.2.0.
+     */
+    if (
+        card.narrativeLines !== undefined
+        && card.narrativeLines.length > 0
+    ) {
+      for (
+          const [
+            narrativeIndex,
+            narrativeLine,
+          ] of card.narrativeLines.entries()
+          ) {
+        result.push({
+          id:
+              `${event.index}` +
+              `-${sideName}` +
+              `-card-${card.carCardId}` +
+              `-${card.activationNumber}` +
+              `-${narrativeIndex}`,
+
+          type:
+              getNarrativeLineType(
+                  narrativeLine.type,
+              ),
+
+          text:
+          narrativeLine.text,
+
+          tone:
+              getNarrativeTone(
+                  narrativeLine.type,
+              ),
+        })
+      }
+
+      continue
+    }
+
+    /*
+     * Compatibilité avec les anciens replays
+     * moteur 1.1.0.
+     *
+     * Aucun texte spécifique à une carte
+     * n'est codé dans le frontend.
+     */
     result.push({
       id:
-          `${event.index}-${sideName}-card-${card.carCardId}-${card.activationNumber}`,
+          `${event.index}` +
+          `-${sideName}` +
+          `-card-${card.carCardId}` +
+          `-${card.activationNumber}`,
 
       type: 'card',
 
-      text: formatTriggeredCard(
-          pilotName,
-          card,
-          event.index,
-      ),
+      text:
+          `${pilotName} utilise ${card.name}` +
+          ` : ${formatSigned(card.value)}` +
+          ` ${statLabel(card.stat)}.`,
 
       tone: 'important',
     })
   }
 }
 
-function formatTriggeredCard(
-    pilotName: string,
-    card: TriggeredCard,
-    eventIndex: number,
-): string {
-  const verbs = [
-    'déclenche',
-    'utilise',
-    'active',
-    'fait appel à',
-  ]
+function getNarrativeLineType(
+    type: NarrativeLineType,
+): TerminalLine['type'] {
+  switch (type) {
+    case 'card_activation':
+      return 'card'
 
-  const verb =
-      pick(
-          verbs,
-          eventIndex
-          + card.carCardId
-          + card.activationNumber,
-      )
+    case 'card_effect':
+      return 'cardEffect'
 
-  return (
-      `${pilotName} ${verb} ${card.name}` +
-      ` : ${formatSigned(card.value)} ${statLabel(card.stat)}`
-  )
+    case 'card_reaction':
+      return 'reaction'
+  }
+}
+
+function getNarrativeTone(
+    type: NarrativeLineType,
+): TerminalLine['tone'] {
+  switch (type) {
+    case 'card_activation':
+      return 'important'
+
+    case 'card_effect':
+      return 'good'
+
+    case 'card_reaction':
+      return 'normal'
+  }
 }
 
 function buildGapNarration(
     event: DuelEvent,
 ): {
   text: string
+
   tone:
       | 'normal'
       | 'good'
@@ -602,17 +823,17 @@ function buildGapNarration(
             ? props.attackerName
             : props.defenderName
 
-    const variants = [
-      `${leaderName} prend la tête !`,
-      `${leaderName} passe devant !`,
-      `${leaderName} renverse la situation et prend l’avantage !`,
-    ]
-
     return {
       text: pick(
-          variants,
+          [
+            `${leaderName} prend la tête !`,
+            `${leaderName} passe devant !`,
+            `${leaderName} renverse la situation et prend l’avantage !`,
+            `${leaderName} trouve l’ouverture et s’empare de la première place !`,
+          ],
           event.index,
       ),
+
       tone: 'important',
     }
   }
@@ -620,18 +841,18 @@ function buildGapNarration(
   /*
    * Retour à égalité.
    */
-  if (
-      currentLeader === 'tie'
-  ) {
+  if (currentLeader === 'tie') {
     return {
       text: pick(
           [
             'Les deux voitures sont côte à côte !',
             'Impossible de les départager pour le moment.',
             'Les deux pilotes reviennent exactement à hauteur.',
+            'Personne ne veut céder un centimètre !',
           ],
           event.index,
       ),
+
       tone: 'important',
     }
   }
@@ -656,7 +877,7 @@ function buildGapNarration(
       currentGap - previousGap
 
   /*
-   * Très faible écart.
+   * Duel extrêmement serré.
    */
   if (currentGap <= 2) {
     return {
@@ -665,9 +886,11 @@ function buildGapNarration(
             `${chaserName} reste dans le pare-chocs de ${leaderName}.`,
             `${leaderName} n’arrive pas à décrocher ${chaserName}.`,
             'Les deux voitures sont presque côte à côte.',
+            `${chaserName} met une pression énorme sur ${leaderName}.`,
           ],
           event.index,
       ),
+
       tone: 'normal',
     }
   }
@@ -682,15 +905,17 @@ function buildGapNarration(
             `${leaderName} s’échappe !`,
             `${leaderName} fait le trou !`,
             `${leaderName} inflige un gros coup à son adversaire.`,
+            `${leaderName} prend une avance considérable !`,
           ],
           event.index,
       ),
+
       tone: 'important',
     }
   }
 
   /*
-   * Petite augmentation de l'écart.
+   * Petite augmentation.
    */
   if (movement > 0) {
     return {
@@ -699,9 +924,11 @@ function buildGapNarration(
             `${leaderName} creuse légèrement l’écart.`,
             `${leaderName} prend un peu d’air.`,
             `${leaderName} gagne quelques mètres.`,
+            `${leaderName} consolide son avance.`,
           ],
           event.index,
       ),
+
       tone: 'good',
     }
   }
@@ -716,9 +943,11 @@ function buildGapNarration(
             `${chaserName} revient comme une balle sur ${leaderName} !`,
             `${chaserName} efface une grosse partie de son retard !`,
             `${chaserName} fond sur ${leaderName} !`,
+            `${leaderName} voit soudainement ${chaserName} revenir dans ses rétroviseurs !`,
           ],
           event.index,
       ),
+
       tone: 'important',
     }
   }
@@ -733,16 +962,21 @@ function buildGapNarration(
             `${chaserName} grignote son retard.`,
             `${chaserName} revient progressivement.`,
             `${leaderName} voit ${chaserName} revenir dans ses rétroviseurs.`,
+            `${chaserName} réduit peu à peu l’écart.`,
           ],
           event.index,
       ),
+
       tone: 'normal',
     }
   }
 
   return {
-    text: 'L’écart reste stable.',
-    tone: 'normal',
+    text:
+        'L’écart reste parfaitement stable.',
+
+    tone:
+        'normal',
   }
 }
 
@@ -759,6 +993,7 @@ function appendResult(
     id: 'result-winner',
     type: 'result',
     tone: 'important',
+
     text:
         `${props.winnerName} franchit la ligne en tête !`,
   })
@@ -771,15 +1006,19 @@ function appendResult(
   if (gap <= 1) {
     resultText =
         'Victoire sur le fil !'
+
   } else if (gap <= 3) {
     resultText =
         `Victoire très disputée avec ${gap} points d’avance.`
+
   } else if (gap <= 7) {
     resultText =
         `Victoire solide avec ${gap} points d’avance.`
+
   } else if (gap <= 12) {
     resultText =
         `Large victoire avec ${gap} points d’avance.`
+
   } else {
     resultText =
         `Démonstration totale : ${gap} points d’avance !`
@@ -794,7 +1033,7 @@ function appendResult(
 }
 
 function getScore(
-    side: EventSide | undefined,
+    side: DuelEventSide | undefined,
 ): number {
   return (
       side?.score
@@ -806,7 +1045,10 @@ function getScore(
 
 function leaderFromGap(
     gap: number,
-): 'attacker' | 'defender' | 'tie' {
+):
+    | 'attacker'
+    | 'defender'
+    | 'tie' {
   if (gap > 0) {
     return 'attacker'
   }
@@ -831,13 +1073,22 @@ function eventTitle(
     case 'turn':
       return 'VIRAGE'
 
+    case 'chicane':
+      return 'CHICANE'
+
+    case 'finalSprint':
+      return 'SPRINT FINAL'
+
     case 'braking':
       return 'FREINAGE'
 
     case 'acceleration':
       return 'RELANCE'
 
-    default:
+    case 'photoFinish':
+      return 'PHOTO-FINISH'
+
+    case 'other':
       return (
           event.label
           || event.type
@@ -849,6 +1100,34 @@ function eventTitle(
 function getEventContext(
     event: DuelEvent,
 ): EventContext {
+  /*
+   * On privilégie le type technique stable
+   * fourni par le backend.
+   */
+  switch (event.type) {
+    case 'start':
+      return 'start'
+
+    case 'straight':
+      return 'straight'
+
+    case 'turn':
+      return 'turn'
+
+    case 'chicane':
+      return 'chicane'
+
+    case 'final_sprint':
+      return 'finalSprint'
+
+    case 'photo_finish':
+      return 'photoFinish'
+  }
+
+  /*
+   * Compatibilité avec de futurs types
+   * ou d'anciens replays.
+   */
   const value =
       `${event.type} ${event.label ?? ''}`
           .toLowerCase()
@@ -858,6 +1137,19 @@ function getEventContext(
       || value.includes('ligne droite')
   ) {
     return 'straight'
+  }
+
+  if (
+      value.includes('chicane')
+  ) {
+    return 'chicane'
+  }
+
+  if (
+      value.includes('final_sprint')
+      || value.includes('sprint final')
+  ) {
+    return 'finalSprint'
   }
 
   if (
@@ -888,6 +1180,12 @@ function getEventContext(
       || value.includes('relance')
   ) {
     return 'acceleration'
+  }
+
+  if (
+      value.includes('photo')
+  ) {
+    return 'photoFinish'
   }
 
   return 'other'
@@ -925,19 +1223,32 @@ function formatSigned(
 }
 
 /*
- * Choix déterministe :
- * contrairement à Math.random(), la phrase
- * ne change pas à chaque recalcul Vue.
+ * Sélection déterministe.
+ *
+ * Pas de Math.random() :
+ * la formulation reste identique lorsqu'on
+ * rejoue le même duel.
  */
 function pick<T>(
-    values: T[],
+    values: readonly T[],
     seed: number,
 ): T {
-  return values[
-  Math.abs(seed) % values.length
-      ]
+  if (values.length === 0) {
+    throw new Error(
+        'Impossible de sélectionner une phrase dans une liste vide.',
+    )
+  }
+
+  const index =
+      Math.abs(seed) % values.length
+
+  return values[index] as T
 }
 
+/*
+ * Scroll automatique à chaque arrivée
+ * de nouvelles lignes.
+ */
 watch(
     () => lines.value.length,
     async () => {
@@ -953,7 +1264,8 @@ watch(
         top:
         terminalElement.value.scrollHeight,
 
-        behavior: 'smooth',
+        behavior:
+            'smooth',
       })
     },
 )
@@ -1034,6 +1346,24 @@ watch(
 
           <span
               v-else-if="
+                line.type === 'cardEffect'
+              "
+              class="terminal-prefix"
+          >
+            │
+          </span>
+
+          <span
+              v-else-if="
+                line.type === 'reaction'
+              "
+              class="terminal-prefix"
+          >
+            └
+          </span>
+
+          <span
+              v-else-if="
                 line.type === 'status'
               "
               class="terminal-prefix"
@@ -1050,7 +1380,7 @@ watch(
             ★
           </span>
 
-          <span>
+          <span class="terminal-text">
             {{ line.text }}
           </span>
         </template>
@@ -1099,9 +1429,12 @@ watch(
   width: 8px;
   height: 8px;
 
+  flex: 0 0 8px;
+
   border-radius: 50%;
 
   background: currentColor;
+
   opacity: 0.65;
 }
 
@@ -1109,6 +1442,7 @@ watch(
   margin-left: auto;
 
   font-size: 0.7rem;
+
   opacity: 0.65;
 }
 
@@ -1122,7 +1456,10 @@ watch(
 
   overflow-y: auto;
 
-  padding: 18px 18px 24px;
+  padding:
+      18px
+      18px
+      24px;
 
   font-family:
       "SFMono-Regular",
@@ -1154,6 +1491,7 @@ watch(
   margin-top: 18px;
 
   font-weight: 800;
+
   letter-spacing: 0.06em;
 }
 
@@ -1165,22 +1503,62 @@ watch(
   padding-left: 19px;
 }
 
+/*
+ * Activation de capacité.
+ */
 .terminal-line-card {
+  margin-top: 4px;
+
   padding-left: 19px;
 
-  font-weight: 700;
+  font-weight: 800;
+}
+
+/*
+ * Effet produit par la capacité.
+ *
+ * Exemple :
+ * │ La voiture bondit : +8 vitesse !
+ */
+.terminal-line-cardEffect {
+  padding-left: 30px;
+
+  opacity: 0.9;
+}
+
+/*
+ * Réaction adverse.
+ *
+ * Exemple :
+ * └ Ghost tente de rester dans l'aspiration.
+ */
+.terminal-line-reaction {
+  padding-left: 30px;
+
+  font-style: italic;
+
+  opacity: 0.72;
 }
 
 .terminal-line-status {
-  margin: 3px 0 9px;
+  margin:
+      3px
+      0
+      9px;
+
   padding-left: 19px;
 
   font-style: italic;
+
   opacity: 0.82;
 }
 
 .terminal-line-result {
   font-weight: 800;
+}
+
+.terminal-tone-normal {
+  opacity: 0.9;
 }
 
 .terminal-tone-good {
@@ -1199,7 +1577,14 @@ watch(
   flex: 0 0 14px;
 
   user-select: none;
+
   opacity: 0.65;
+}
+
+.terminal-text {
+  min-width: 0;
+
+  overflow-wrap: anywhere;
 }
 
 .separator {
@@ -1208,7 +1593,9 @@ watch(
   width: 100%;
   height: 1px;
 
-  margin: 18px 0;
+  margin:
+      18px
+      0;
 
   background:
       rgba(255, 255, 255, 0.15);
@@ -1216,18 +1603,23 @@ watch(
 
 .terminal-waiting {
   margin: 0;
+
   opacity: 0.6;
 }
 
 @keyframes terminal-line-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+
+    transform:
+        translateY(4px);
   }
 
   to {
     opacity: 1;
-    transform: translateY(0);
+
+    transform:
+        translateY(0);
   }
 }
 
@@ -1241,6 +1633,11 @@ watch(
         18px;
 
     font-size: 0.78rem;
+  }
+
+  .terminal-line-cardEffect,
+  .terminal-line-reaction {
+    padding-left: 20px;
   }
 }
 </style>
