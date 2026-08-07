@@ -17,6 +17,7 @@ import AdminDuelsView from '../views/admin/AdminDuelsView.vue'
 import AdminDuelDetailView from '../views/admin/AdminDuelDetailView.vue'
 import AdminCardsView from '../views/admin/AdminCardsView.vue'
 import AdminCardDetailView from '../views/admin/AdminCardDetailView.vue'
+import AdminEventsView from '../views/admin/AdminEventsView.vue'
 
 const routes: RouteRecordRaw[] = [
     {
@@ -127,6 +128,15 @@ const routes: RouteRecordRaw[] = [
         path: '/admin/cards/:id',
         name: 'admin-card-detail',
         component: AdminCardDetailView,
+        meta: {
+            requiresAuth: true,
+            requiresAdmin: true,
+        },
+    },
+    {
+        path: '/admin/events',
+        name: 'admin-events',
+        component: AdminEventsView,
         meta: {
             requiresAuth: true,
             requiresAdmin: true,

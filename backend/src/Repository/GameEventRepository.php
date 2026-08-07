@@ -10,6 +10,7 @@ use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 use App\Entity\User;
 use App\Entity\Car;
+use Doctrine\ORM\QueryBuilder;
 
 /**
  * @extends ServiceEntityRepository<GameEvent>
@@ -99,5 +100,157 @@ final class GameEventRepository extends ServiceEntityRepository
             ->setMaxResults($limit)
             ->getQuery()
             ->getResult();
+    }
+    /**
+     * @return list<GameEvent>
+     */
+    public function findAdminPage(
+        ?string $search,
+        ?GameEventType $type,
+        ?\DateTimeImmutable $dateFrom,
+        ?\DateTimeImmutable $dateToExclusive,
+        int $page,
+        int $itemsPerPage,
+    ): array {
+        $queryBuilder = $this
+            ->createQueryBuilder('event')
+            ->addSelect(
+                'eventUser',
+                'car',
+                'duel',
+            )
+            ->leftJoin(
+                'event.user',
+                'eventUser',
+            )
+            ->leftJoin(
+                'event.car',
+                'car',
+            )
+            ->leftJoin(
+                'event.duel',
+                'duel',
+            )
+            ->orderBy(
+                'event.occurredAt',
+                'DESC',
+            )
+            ->addOrderBy(
+                'event.id',
+                'DESC',
+            )
+            ->setFirstResult(
+                ($page - 1) * $itemsPerPage,
+            )
+            ->setMaxResults(
+                $itemsPerPage,
+            );
+
+        $this->applyAdminFilters(
+            queryBuilder: $queryBuilder,
+            search: $search,
+            type: $type,
+            dateFrom: $dateFrom,
+            dateToExclusive: $dateToExclusive,
+        );
+
+        /** @var list<GameEvent> $events */
+        $events = $queryBuilder
+            ->getQuery()
+            ->getResult();
+
+        return $events;
+    }
+
+    public function countForAdminFilters(
+        ?string $search,
+        ?GameEventType $type,
+        ?\DateTimeImmutable $dateFrom,
+        ?\DateTimeImmutable $dateToExclusive,
+    ): int {
+        $queryBuilder = $this
+            ->createQueryBuilder('event')
+            ->select(
+                'COUNT(event.id)',
+            )
+            ->leftJoin(
+                'event.user',
+                'eventUser',
+            )
+            ->leftJoin(
+                'event.car',
+                'car',
+            );
+
+        $this->applyAdminFilters(
+            queryBuilder: $queryBuilder,
+            search: $search,
+            type: $type,
+            dateFrom: $dateFrom,
+            dateToExclusive: $dateToExclusive,
+        );
+
+        return (int) $queryBuilder
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
+    private function applyAdminFilters(
+        QueryBuilder $queryBuilder,
+        ?string $search,
+        ?GameEventType $type,
+        ?\DateTimeImmutable $dateFrom,
+        ?\DateTimeImmutable $dateToExclusive,
+    ): void {
+        if (
+            $search !== null
+            && $search !== ''
+        ) {
+            $queryBuilder
+                ->andWhere(
+                    'LOWER(eventUser.email) LIKE :search
+                OR LOWER(car.pilotName) LIKE :search',
+                )
+                ->setParameter(
+                    'search',
+                    '%' . mb_strtolower($search) . '%',
+                );
+        }
+
+        if ($type instanceof GameEventType) {
+            $queryBuilder
+                ->andWhere(
+                    'event.type = :type',
+                )
+                ->setParameter(
+                    'type',
+                    $type,
+                );
+        }
+
+        if ($dateFrom instanceof \DateTimeImmutable) {
+            $queryBuilder
+                ->andWhere(
+                    'event.occurredAt >= :dateFrom',
+                )
+                ->setParameter(
+                    'dateFrom',
+                    $dateFrom,
+                );
+        }
+
+        if (
+            $dateToExclusive
+            instanceof \DateTimeImmutable
+        ) {
+            $queryBuilder
+                ->andWhere(
+                    'event.occurredAt < :dateToExclusive',
+                )
+                ->setParameter(
+                    'dateToExclusive',
+                    $dateToExclusive,
+                );
+        }
     }
 }

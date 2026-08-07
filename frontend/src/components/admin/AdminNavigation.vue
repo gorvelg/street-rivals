@@ -32,9 +32,12 @@ import { RouterLink } from 'vue-router'
       Duels
     </RouterLink>
 
-    <span class="admin-navigation-link disabled">
-      Événements
-    </span>
+    <RouterLink
+        :to="{ name: 'admin-events' }"
+        class="admin-navigation-link"
+    >
+      Historique
+    </RouterLink>
 
     <RouterLink
         :to="{ name: 'admin-cards' }"

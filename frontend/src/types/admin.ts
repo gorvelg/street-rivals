@@ -538,3 +538,48 @@ export interface AdminCardUpdateResponse {
         AdminCardUpdateChange
     >
 }
+export interface AdminGameEventUser {
+    id: number
+    email: string
+    isActive: boolean
+}
+
+export interface AdminGameEventCar {
+    id: number
+    pilotName: string
+    color: string
+}
+
+export interface AdminGameEventDuel {
+    id: number
+}
+
+export interface AdminGameEvent {
+    id: number
+    type: string
+    occurredAt: string
+
+    user: AdminGameEventUser | null
+    car: AdminGameEventCar | null
+    duel: AdminGameEventDuel | null
+
+    payload: Record<string, unknown>
+}
+
+export interface AdminGameEventsFilters {
+    search: string | null
+    type: string | null
+    dateFrom: string | null
+    dateTo: string | null
+}
+
+export interface AdminGameEventsOptions {
+    types: string[]
+}
+
+export interface AdminGameEventsResponse {
+    members: AdminGameEvent[]
+    pagination: AdminPagination
+    filters: AdminGameEventsFilters
+    options: AdminGameEventsOptions
+}
