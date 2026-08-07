@@ -7,9 +7,12 @@ namespace App\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Dto\SelectCardChoiceInput;
+use App\Entity\Car;
 use App\Entity\CarCard;
+use App\Entity\Card;
 use App\Entity\CardChoice;
 use App\Entity\User;
+use App\Enum\CardKind;
 use App\Enum\GameEventType;
 use App\Repository\CarCardRepository;
 use App\Repository\CardChoiceRepository;
@@ -28,7 +31,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 /**
  * @implements ProcessorInterface<SelectCardChoiceInput, CardChoice>
  */
-final class SelectCardChoiceProcessor implements ProcessorInterface
+final class SelectCardChoiceProcessor
+    implements ProcessorInterface
 {
     public function __construct(
         private readonly Security $security,
@@ -55,195 +59,443 @@ final class SelectCardChoiceProcessor implements ProcessorInterface
             || $data->cardId === null
         ) {
             throw new BadRequestHttpException(
-                'L’identifiant de la carte est obligatoire.'
+                'L’identifiant de la carte est obligatoire.',
             );
         }
 
         /*
-         * Vérification de l’identifiant du choix présent dans l’URL.
+         * Vérification de l'identifiant
+         * du choix présent dans l'URL.
          */
         $choiceId = filter_var(
             $uriVariables['id'] ?? null,
-            FILTER_VALIDATE_INT
+            FILTER_VALIDATE_INT,
         );
 
-        if ($choiceId === false || $choiceId === null) {
+        if (
+            $choiceId === false
+            || $choiceId === null
+        ) {
             throw new BadRequestHttpException(
-                'L’identifiant du choix est invalide.'
+                'L’identifiant du choix est invalide.',
             );
         }
 
         /*
-         * Vérification de l’utilisateur connecté.
+         * Utilisateur connecté.
          */
-        $user = $this->security->getUser();
+        $user = $this->security
+            ->getUser();
 
         if (!$user instanceof User) {
             throw new AccessDeniedHttpException(
-                'Utilisateur non authentifié.'
+                'Utilisateur non authentifié.',
             );
         }
 
         /*
-         * Chargement du choix de cartes.
+         * Chargement du CardChoice.
          */
-        $choice = $this->cardChoiceRepository->find($choiceId);
+        $choice =
+            $this->cardChoiceRepository
+                ->find($choiceId);
 
         if (!$choice instanceof CardChoice) {
             throw new NotFoundHttpException(
-                'Choix de cartes introuvable.'
+                'Choix de cartes introuvable.',
             );
         }
 
         $car = $choice->getCar();
 
-        if ($car === null) {
+        if (!$car instanceof Car) {
             throw new \LogicException(
-                'Le choix de cartes ne possède aucune voiture.'
+                'Le choix de cartes ne possède aucune voiture.',
             );
         }
 
         /*
-         * Le choix doit appartenir à une voiture du joueur connecté.
+         * Le choix doit appartenir
+         * au joueur connecté.
          */
-        if ($car->getUser()?->getId() !== $user->getId()) {
+        if (
+            $car->getUser()?->getId()
+            !== $user->getId()
+        ) {
             throw new AccessDeniedHttpException(
-                'Ce choix ne vous appartient pas.'
+                'Ce choix ne vous appartient pas.',
             );
         }
 
         /*
-         * Un choix déjà résolu ne peut pas être rejoué.
+         * Un CardChoice résolu ne peut
+         * plus être utilisé.
          */
         if (!$choice->isPending()) {
             throw new ConflictHttpException(
-                'Une carte a déjà été sélectionnée.'
+                'Une carte a déjà été sélectionnée.',
             );
         }
 
         /*
-         * Chargement de la carte sélectionnée.
+         * Chargement de la carte choisie.
          */
-        $card = $this->cardRepository->find($data->cardId);
+        $card = $this->cardRepository
+            ->find(
+                $data->cardId,
+            );
 
-        if ($card === null) {
+        if (!$card instanceof Card) {
             throw new NotFoundHttpException(
-                'Carte introuvable.'
+                'Carte introuvable.',
             );
         }
 
         /*
-         * La carte doit obligatoirement faire partie
-         * des deux propositions du choix.
+         * La carte doit toujours faire partie
+         * du choix proposé.
          */
         if (!$choice->containsCard($card)) {
             throw new HttpException(
                 Response::HTTP_UNPROCESSABLE_ENTITY,
-                'Cette carte ne fait pas partie des cartes proposées.'
+                'Cette carte ne fait pas partie des cartes proposées.',
             );
         }
 
         /*
-         * Recherche d’une éventuelle acquisition existante.
+         * Si une carte a été désactivée par
+         * l'administration entre la génération
+         * du choix et sa sélection, on refuse
+         * désormais son acquisition.
          */
-        $existingCarCard = $this->carCardRepository->findOneBy([
-            'car' => $car,
-            'card' => $card,
-        ]);
+        if (!$card->isEnabled()) {
+            throw new ConflictHttpException(
+                'Cette carte n’est plus disponible.',
+            );
+        }
+
+        /*
+         * Validation générale du maxTier.
+         */
+        if ($card->getMaxTier() < 1) {
+            throw new \LogicException(
+                sprintf(
+                    'La carte "%s" possède un palier maximal invalide.',
+                    $card->getName(),
+                ),
+            );
+        }
+
+        /*
+         * Vérification spécifique des équipements.
+         */
+        if (
+            $card->getKind()
+            === CardKind::EQUIPMENT
+            && $card->getEquipmentSlot() === null
+        ) {
+            throw new \LogicException(
+                sprintf(
+                    'L’équipement "%s" ne possède aucun emplacement.',
+                    $card->getName(),
+                ),
+            );
+        }
+
+        /*
+         * Recherche d'une éventuelle
+         * acquisition précédente.
+         */
+        $existingCarCard =
+            $this->carCardRepository
+                ->findOneBy([
+                    'car' => $car,
+                    'card' => $card,
+                ]);
 
         $previousTier = 0;
         $newTier = 1;
-        $eventType = GameEventType::CARD_SELECTED;
+
+        $eventType =
+            GameEventType::CARD_SELECTED;
+
+        $wasAutoEquipped = false;
 
         /*
-         * La voiture possède déjà la carte :
-         * on augmente son palier.
+         * ==========================================
+         * CARTE DÉJÀ POSSÉDÉE
+         * ==========================================
+         *
+         * On augmente simplement son palier.
+         *
+         * Son état equipped n'est jamais modifié.
          */
-        if ($existingCarCard instanceof CarCard) {
-            if (!$existingCarCard->canUpgrade()) {
+        if (
+            $existingCarCard
+            instanceof CarCard
+        ) {
+            if (
+                !$existingCarCard
+                    ->canUpgrade()
+            ) {
                 throw new ConflictHttpException(
-                    'Cette carte a déjà atteint son palier maximal.'
+                    sprintf(
+                        'Cette carte a déjà atteint son palier maximal %d.',
+                        $card->getMaxTier(),
+                    ),
                 );
             }
 
-            $previousTier = $existingCarCard->getTier();
+            $previousTier =
+                $existingCarCard
+                    ->getTier();
 
-            $existingCarCard->upgrade();
+            $existingCarCard
+                ->upgrade();
 
-            $newTier = $existingCarCard->getTier();
-            $eventType = GameEventType::CARD_UPGRADED;
+            $newTier =
+                $existingCarCard
+                    ->getTier();
+
+            $eventType =
+                GameEventType::CARD_UPGRADED;
         } else {
             /*
-             * Première acquisition :
-             * création de la carte au palier 1.
+             * ======================================
+             * PREMIÈRE ACQUISITION
+             * ======================================
              */
+
             $carCard = new CarCard();
 
             $carCard
                 ->setCar($car)
                 ->setCard($card)
-                ->setEquipped(true)
-                ->setAcquiredLevel($choice->getLevel());
+                ->setAcquiredLevel(
+                    $choice->getLevel(),
+                );
 
-            $this->entityManager->persist($carCard);
+            /*
+             * Le comportement initial dépend
+             * maintenant de CardKind.
+             */
+            switch ($card->getKind()) {
+                /*
+                 * Les anciennes capacités
+                 * conservent leur fonctionnement :
+                 * elles sont équipées directement.
+                 */
+                case CardKind::ABILITY:
+                    $carCard->setEquipped(
+                        true,
+                    );
+
+                    break;
+
+                /*
+                 * Un STAT_BOOST est toujours pris
+                 * en compte par CarStatsCalculator.
+                 *
+                 * isEquipped n'a donc aucune fonction
+                 * pour cette famille.
+                 */
+                case CardKind::STAT_BOOST:
+                    $carCard->setEquipped(
+                        false,
+                    );
+
+                    break;
+
+                /*
+                 * Un nouvel équipement est
+                 * automatiquement équipé uniquement
+                 * si son emplacement est libre.
+                 */
+                case CardKind::EQUIPMENT:
+                    $slotIsAvailable =
+                        $this
+                            ->isEquipmentSlotAvailable(
+                                car: $car,
+                                card: $card,
+                            );
+
+                    $carCard->setEquipped(
+                        $slotIsAvailable,
+                    );
+
+                    $wasAutoEquipped =
+                        $slotIsAvailable;
+
+                    break;
+            }
+
+            $this->entityManager
+                ->persist(
+                    $carCard,
+                );
         }
 
         /*
-         * Le choix devient définitif.
+         * Le CardChoice devient définitif.
          */
-        $choice->selectCard($card);
+        $choice->selectCard(
+            $card,
+        );
 
         /*
-         * Enregistrement de l’événement analytique.
-         *
-         * track() ne déclenche aucun flush.
-         * L’événement sera enregistré en même temps que le choix,
-         * la CarCard et l’éventuelle nouvelle montée de niveau.
+         * Historisation.
          */
         $this->eventTracker->track(
             type: $eventType,
+
             user: $user,
+
             car: $car,
+
             payload: [
-                'cardChoiceId' => $choice->getId(),
-                'cardId' => $card->getId(),
-                'cardCode' => $card->getCode(),
-                'cardName' => $card->getName(),
-                'cardType' => $card->getType(),
-                'cardRarity' => $card->getRarity(),
-                'choiceLevel' => $choice->getLevel(),
-                'previousTier' => $previousTier,
-                'newTier' => $newTier,
+                'cardChoiceId' =>
+                    $choice->getId(),
+
+                'cardId' =>
+                    $card->getId(),
+
+                'cardCode' =>
+                    $card->getCode(),
+
+                'cardName' =>
+                    $card->getName(),
+
+                /*
+                 * Ancien type fonctionnel :
+                 * PASSIVE / ACTIVE...
+                 */
+                'cardType' =>
+                    $card->getType(),
+
+                /*
+                 * Nouvelle famille :
+                 * ability / equipment / stat_boost
+                 */
+                'cardKind' =>
+                    $card->getKind()->value,
+
+                'equipmentSlot' =>
+                    $card
+                        ->getEquipmentSlot()
+                        ?->value,
+
+                'cardRarity' =>
+                    $card->getRarity(),
+
+                'choiceLevel' =>
+                    $choice->getLevel(),
+
+                'previousTier' =>
+                    $previousTier,
+
+                'newTier' =>
+                    $newTier,
+
+                'maxTier' =>
+                    $card->getMaxTier(),
+
                 'wasUpgrade' =>
-                    $eventType === GameEventType::CARD_UPGRADED,
+                    $eventType
+                    === GameEventType::CARD_UPGRADED,
+
+                'wasAutoEquipped' =>
+                    $wasAutoEquipped,
             ],
         );
 
         /*
-         * Si la voiture possède encore assez d’XP pour monter,
-         * la progression reprend après la résolution du choix.
-         *
-         * Une nouvelle montée de niveau peut générer :
-         * - un nouvel événement level_up ;
-         * - un nouveau CardChoice.
+         * Si suffisamment d'XP reste disponible,
+         * on traite éventuellement le niveau suivant.
          */
         $this->carProgressionService
             ->processNextLevelIfPossible(
                 $car,
-                $choice
+                $choice,
             );
 
         /*
-         * Enregistrement de l’ensemble :
-         *
-         * - choix sélectionné ;
-         * - nouvelle CarCard ou palier amélioré ;
-         * - événement card_selected ou card_upgraded ;
-         * - éventuelle montée de niveau ;
-         * - éventuel nouveau choix de cartes.
+         * Sauvegarde de l'ensemble.
          */
-        $this->entityManager->flush();
+        $this->entityManager
+            ->flush();
 
         return $choice;
+    }
+
+    /**
+     * Vérifie qu'aucun autre équipement actif
+     * n'occupe déjà le slot de la nouvelle carte.
+     */
+    private function isEquipmentSlotAvailable(
+        Car $car,
+        Card $card,
+    ): bool {
+        if (
+            $card->getKind()
+            !== CardKind::EQUIPMENT
+        ) {
+            return false;
+        }
+
+        $equipmentSlot =
+            $card->getEquipmentSlot();
+
+        if ($equipmentSlot === null) {
+            return false;
+        }
+
+        /** @var list<CarCard> $ownedCards */
+        $ownedCards =
+            $this->carCardRepository
+                ->findBy([
+                    'car' => $car,
+                ]);
+
+        foreach ($ownedCards as $ownedCarCard) {
+            /*
+             * Une carte non équipée
+             * n'occupe aucun slot.
+             */
+            if (
+                !$ownedCarCard
+                    ->isEquipped()
+            ) {
+                continue;
+            }
+
+            $ownedCard =
+                $ownedCarCard->getCard();
+
+            if (!$ownedCard instanceof Card) {
+                continue;
+            }
+
+            /*
+             * Les anciennes ABILITY équipées
+             * n'ont aucun rapport avec les
+             * emplacements d'équipement.
+             */
+            if (
+                $ownedCard->getKind()
+                !== CardKind::EQUIPMENT
+            ) {
+                continue;
+            }
+
+            if (
+                $ownedCard
+                    ->getEquipmentSlot()
+                === $equipmentSlot
+            ) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

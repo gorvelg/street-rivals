@@ -20,22 +20,22 @@ use Symfony\Component\Validator\Constraints as Assert;
     uniqueConstraints: [
         new ORM\UniqueConstraint(
             name: 'uniq_car_card',
-            columns: ['car_id', 'card_id']
+            columns: ['car_id', 'card_id'],
         ),
-    ]
+    ],
 )]
 #[ApiResource(
     operations: [
         new GetCollection(
-            security: "is_granted('ROLE_USER')"
+            security: "is_granted('ROLE_USER')",
         ),
         new Get(
             security: "object.getCar().getUser() == user",
-            securityMessage: 'Cette carte ne vous appartient pas.'
+            securityMessage: 'Cette carte ne vous appartient pas.',
         ),
         new Patch(
             security: "object.getCar().getUser() == user",
-            securityMessage: 'Cette carte ne vous appartient pas.'
+            securityMessage: 'Cette carte ne vous appartient pas.',
         ),
     ],
     normalizationContext: [
@@ -47,9 +47,6 @@ use Symfony\Component\Validator\Constraints as Assert;
 )]
 class CarCard
 {
-
-    public const MAX_TIER = 3;
-
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -61,7 +58,7 @@ class CarCard
         name: 'car_id',
         referencedColumnName: 'id',
         nullable: false,
-        onDelete: 'CASCADE'
+        onDelete: 'CASCADE',
     )]
     #[Groups(['car-card:read'])]
     private ?Car $car = null;
@@ -71,7 +68,7 @@ class CarCard
         name: 'card_id',
         referencedColumnName: 'id',
         nullable: false,
-        onDelete: 'RESTRICT'
+        onDelete: 'RESTRICT',
     )]
     #[Groups(['car-card:read'])]
     private ?Card $card = null;
@@ -95,7 +92,8 @@ class CarCard
 
     public function __construct()
     {
-        $this->acquiredAt = new \DateTimeImmutable();
+        $this->acquiredAt =
+            new \DateTimeImmutable();
     }
 
     public function getId(): ?int
@@ -108,8 +106,9 @@ class CarCard
         return $this->car;
     }
 
-    public function setCar(Car $car): static
-    {
+    public function setCar(
+        Car $car,
+    ): static {
         $this->car = $car;
 
         return $this;
@@ -120,8 +119,9 @@ class CarCard
         return $this->card;
     }
 
-    public function setCard(Card $card): static
-    {
+    public function setCard(
+        Card $card,
+    ): static {
         $this->card = $card;
 
         return $this;
@@ -132,11 +132,17 @@ class CarCard
         return $this->isEquipped;
     }
 
-    public function setEquipped(bool $isEquipped): static
-    {
+    public function setEquipped(
+        bool $isEquipped,
+    ): static {
         $this->isEquipped = $isEquipped;
 
         return $this;
+    }
+
+    public function getTier(): int
+    {
+        return $this->tier;
     }
 
     public function getAcquiredLevel(): int
@@ -144,51 +150,79 @@ class CarCard
         return $this->acquiredLevel;
     }
 
-    public function setAcquiredLevel(int $acquiredLevel): static
-    {
+    public function setAcquiredLevel(
+        int $acquiredLevel,
+    ): static {
         if ($acquiredLevel < 1) {
             throw new \InvalidArgumentException(
-                'Le niveau d’acquisition doit être supérieur ou égal à 1.'
+                'Le niveau d’acquisition doit être supérieur ou égal à 1.',
             );
         }
 
-        $this->acquiredLevel = $acquiredLevel;
+        $this->acquiredLevel =
+            $acquiredLevel;
 
         return $this;
     }
 
-    public function getAcquiredAt(): \DateTimeImmutable
-    {
+    public function getAcquiredAt():
+    \DateTimeImmutable {
         return $this->acquiredAt;
     }
 
     public function setAcquiredAt(
-        \DateTimeImmutable $acquiredAt
+        \DateTimeImmutable $acquiredAt,
     ): static {
         $this->acquiredAt = $acquiredAt;
 
         return $this;
     }
 
-
-    public function getTier(): int
-    {
-        return $this->tier;
-    }
-
+    /**
+     * Indique si cette carte possédée
+     * peut encore monter de palier.
+     *
+     * Le palier maximal n'est plus défini
+     * dans CarCard.
+     *
+     * Il dépend maintenant directement
+     * de la Card associée.
+     */
     public function canUpgrade(): bool
     {
-        return $this->tier < self::MAX_TIER;
+        $card = $this->getCard();
+
+        if (!$card instanceof Card) {
+            return false;
+        }
+
+        return $this->tier
+            < $card->getMaxTier();
     }
 
+    /**
+     * Augmente la carte d'un palier.
+     *
+     * La limite dépend de Card::maxTier.
+     */
     public function upgrade(): void
     {
+        $card = $this->getCard();
+
+        if (!$card instanceof Card) {
+            throw new \LogicException(
+                'Impossible d’améliorer une CarCard sans carte associée.',
+            );
+        }
+
+        $maxTier = $card->getMaxTier();
+
         if (!$this->canUpgrade()) {
             throw new \DomainException(
                 sprintf(
                     'Cette carte a déjà atteint le palier maximal %d.',
-                    self::MAX_TIER
-                )
+                    $maxTier,
+                ),
             );
         }
 

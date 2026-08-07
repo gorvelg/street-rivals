@@ -14,6 +14,7 @@ final class AdminCardUpdateService
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly AdminCardUpdateValidator $validator,
+        private readonly CardEffectConfigValidator $cardEffectConfigValidator,
         private readonly GameEventTracker $eventTracker,
     ) {
     }
@@ -28,10 +29,24 @@ final class AdminCardUpdateService
         User $administrator,
         array $payload,
     ): array {
+        /*
+         * Première validation :
+         * structure générale du payload envoyé
+         * par l'administration.
+         */
         $validatedPayload =
-            $this->validator->validate($payload);
+            $this->validator->validate(
+                $payload,
+            );
 
-        $before = $this->serializeCard($card);
+        /*
+         * État de la carte avant modification.
+         * Il servira à générer l'historique
+         * des changements.
+         */
+        $before = $this->serializeCard(
+            $card,
+        );
 
         return $this->entityManager
             ->wrapInTransaction(
@@ -41,6 +56,9 @@ final class AdminCardUpdateService
                     $validatedPayload,
                     $before,
                 ): array {
+                    /*
+                     * Nom
+                     */
                     if (
                         array_key_exists(
                             'name',
@@ -48,10 +66,19 @@ final class AdminCardUpdateService
                         )
                     ) {
                         $card->setName(
-                            $validatedPayload['name'],
+                            $validatedPayload[
+                            'name'
+                            ],
                         );
                     }
 
+                    /*
+                     * Type historique de la carte.
+                     *
+                     * On conserve ce champ pour
+                     * l'instant car il est déjà
+                     * utilisé par le gameplay.
+                     */
                     if (
                         array_key_exists(
                             'type',
@@ -59,10 +86,15 @@ final class AdminCardUpdateService
                         )
                     ) {
                         $card->setType(
-                            $validatedPayload['type'],
+                            $validatedPayload[
+                            'type'
+                            ],
                         );
                     }
 
+                    /*
+                     * Rareté
+                     */
                     if (
                         array_key_exists(
                             'rarity',
@@ -70,10 +102,15 @@ final class AdminCardUpdateService
                         )
                     ) {
                         $card->setRarity(
-                            $validatedPayload['rarity'],
+                            $validatedPayload[
+                            'rarity'
+                            ],
                         );
                     }
 
+                    /*
+                     * Configuration des effets.
+                     */
                     if (
                         array_key_exists(
                             'effectConfig',
@@ -87,23 +124,71 @@ final class AdminCardUpdateService
                         );
                     }
 
+                    /*
+                     * IMPORTANT
+                     *
+                     * À ce stade toutes les
+                     * modifications ont été appliquées
+                     * à l'entité mais rien n'a encore
+                     * été enregistré en base.
+                     *
+                     * On valide donc maintenant la
+                     * cohérence complète de la carte.
+                     *
+                     * ABILITY :
+                     *   l'effectConfig historique
+                     *   reste accepté.
+                     *
+                     * EQUIPMENT :
+                     *   equipmentSlot obligatoire
+                     *   + validation des tiers/stats.
+                     *
+                     * STAT_BOOST :
+                     *   validation des tiers/stats.
+                     */
+                    $this
+                        ->cardEffectConfigValidator
+                        ->validate(
+                            $card,
+                        );
+
+                    /*
+                     * Nouvel état après modification
+                     * et validation.
+                     */
                     $after = $this->serializeCard(
                         $card,
                     );
 
+                    /*
+                     * Détermination précise des
+                     * propriétés qui ont changé.
+                     */
                     $changes = $this->buildChanges(
                         before: $before,
                         after: $after,
                     );
 
+                    /*
+                     * Rien n'a réellement changé.
+                     *
+                     * Aucun événement n'est créé
+                     * et aucun flush n'est nécessaire.
+                     */
                     if ($changes === []) {
                         return [
                             'updated' => false,
+
                             'card' => $after,
+
                             'changes' => [],
                         ];
                     }
 
+                    /*
+                     * Historisation de la modification
+                     * administrative.
+                     */
                     $this->eventTracker->track(
                         type:
                         GameEventType::
@@ -113,25 +198,36 @@ final class AdminCardUpdateService
 
                         payload: [
                             'administratorId' =>
-                                $administrator->getId(),
+                                $administrator
+                                    ->getId(),
 
                             'administratorEmail' =>
-                                $administrator->getEmail(),
+                                $administrator
+                                    ->getEmail(),
 
-                            'cardId' => $card->getId(),
+                            'cardId' =>
+                                $card->getId(),
 
                             'cardCode' =>
                                 $card->getCode(),
 
-                            'changes' => $changes,
+                            'changes' =>
+                                $changes,
                         ],
                     );
 
-                    $this->entityManager->flush();
+                    /*
+                     * Enregistrement de la carte
+                     * et de l'événement.
+                     */
+                    $this->entityManager
+                        ->flush();
 
                     return [
                         'updated' => true,
+
                         'card' => $after,
+
                         'changes' => $changes,
                     ];
                 },
@@ -145,14 +241,24 @@ final class AdminCardUpdateService
         Card $card,
     ): array {
         return [
-            'id' => $card->getId(),
-            'code' => $card->getCode(),
-            'name' => $card->getName(),
-            'type' => $card->getType(),
-            'rarity' => $card->getRarity(),
+            'id' =>
+                $card->getId(),
+
+            'code' =>
+                $card->getCode(),
+
+            'name' =>
+                $card->getName(),
+
+            'type' =>
+                $card->getType(),
+
+            'rarity' =>
+                $card->getRarity(),
 
             'effectConfig' =>
-                $card->getEffectConfig() ?? [],
+                $card->getEffectConfig()
+                ?? [],
         ];
     }
 
@@ -177,7 +283,8 @@ final class AdminCardUpdateService
                 'type',
                 'rarity',
                 'effectConfig',
-            ] as $field
+            ]
+            as $field
         ) {
             if (
                 $before[$field]
@@ -187,8 +294,11 @@ final class AdminCardUpdateService
             }
 
             $changes[$field] = [
-                'before' => $before[$field],
-                'after' => $after[$field],
+                'before' =>
+                    $before[$field],
+
+                'after' =>
+                    $after[$field],
             ];
         }
 

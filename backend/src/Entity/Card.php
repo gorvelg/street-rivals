@@ -12,6 +12,8 @@ use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Attribute\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Enum\CardKind;
+use App\Enum\EquipmentSlot;
 
 #[ORM\Entity(repositoryClass: CardRepository::class)]
 #[ORM\Table(name: 'card')]
@@ -96,6 +98,29 @@ class Card
      */
     #[ORM\Column]
     private bool $isEnabled = true;
+
+    #[ORM\Column(
+        length: 32,
+        enumType: CardKind::class,
+        options: [
+            'default' => 'ability',
+        ],
+    )]
+    private CardKind $kind = CardKind::ABILITY;
+
+    #[ORM\Column(
+        length: 32,
+        nullable: true,
+        enumType: EquipmentSlot::class,
+    )]
+    private ?EquipmentSlot $equipmentSlot = null;
+
+    #[ORM\Column(
+        options: [
+            'default' => 3,
+        ],
+    )]
+    private int $maxTier = 3;
 
     #[ORM\Column]
     #[Groups(['card:read'])]
@@ -237,5 +262,113 @@ class Card
     public function touch(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+    }
+    public function getKind(): CardKind
+    {
+        return $this->kind;
+    }
+
+    public function setKind(
+        CardKind $kind,
+    ): self {
+        $this->kind = $kind;
+
+        /*
+         * Une capacité ou un bonus permanent
+         * ne peut pas occuper un emplacement
+         * d’équipement.
+         */
+        if (!$kind->requiresEquipmentSlot()) {
+            $this->equipmentSlot = null;
+        }
+
+        return $this;
+    }
+
+    public function getEquipmentSlot(): ?EquipmentSlot
+    {
+        return $this->equipmentSlot;
+    }
+
+    public function setEquipmentSlot(
+        ?EquipmentSlot $equipmentSlot,
+    ): self {
+        if (
+            $equipmentSlot !== null
+            && $this->kind !== CardKind::EQUIPMENT
+        ) {
+            throw new \LogicException(
+                'Seule une carte de type équipement peut posséder un emplacement.',
+            );
+        }
+
+        $this->equipmentSlot = $equipmentSlot;
+
+        return $this;
+    }
+
+    public function getMaxTier(): int
+    {
+        return $this->maxTier;
+    }
+
+    public function setMaxTier(
+        int $maxTier,
+    ): self {
+        if ($maxTier < 1 || $maxTier > 10) {
+            throw new \InvalidArgumentException(
+                'Le palier maximal doit être compris entre 1 et 10.',
+            );
+        }
+
+        $this->maxTier = $maxTier;
+
+        return $this;
+    }
+
+    public function isAbility(): bool
+    {
+        return $this->kind === CardKind::ABILITY;
+    }
+
+    public function isEquipment(): bool
+    {
+        return $this->kind === CardKind::EQUIPMENT;
+    }
+
+    public function isStatBoost(): bool
+    {
+        return $this->kind === CardKind::STAT_BOOST;
+    }
+
+    public function hasEquipmentSlot(): bool
+    {
+        return $this->equipmentSlot !== null;
+    }
+    public function validateConfiguration(): void
+    {
+        if (
+            $this->kind === CardKind::EQUIPMENT
+            && $this->equipmentSlot === null
+        ) {
+            throw new \LogicException(
+                'Une carte de type équipement doit posséder un emplacement.',
+            );
+        }
+
+        if (
+            $this->kind !== CardKind::EQUIPMENT
+            && $this->equipmentSlot !== null
+        ) {
+            throw new \LogicException(
+                'Une carte qui n’est pas un équipement ne peut pas posséder d’emplacement.',
+            );
+        }
+
+        if ($this->maxTier < 1 || $this->maxTier > 10) {
+            throw new \LogicException(
+                'Le palier maximal doit être compris entre 1 et 10.',
+            );
+        }
     }
 }
