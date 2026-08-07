@@ -583,3 +583,40 @@ export interface AdminGameEventsResponse {
     filters: AdminGameEventsFilters
     options: AdminGameEventsOptions
 }
+export interface AdminGameSetting {
+    key: string
+    label: string
+    description: string
+    type: string
+
+    value: number
+    defaultValue: number
+
+    minimum: number
+    maximum: number
+
+    unit: string
+    isOverridden: boolean
+
+    updatedAt: string | null
+}
+
+export interface AdminGameSettingsResponse {
+    members: AdminGameSetting[]
+}
+
+export interface AdminGameSettingChange {
+    before: number
+    after: number
+}
+
+export interface AdminGameSettingsUpdateResponse {
+    updated: boolean
+
+    changes: Record<
+        string,
+        AdminGameSettingChange
+    >
+
+    settings: AdminGameSetting[]
+}

@@ -45,6 +45,12 @@ import { RouterLink } from 'vue-router'
     >
       Cartes
     </RouterLink>
+    <RouterLink
+        :to="{ name: 'admin-game-settings' }"
+        class="admin-navigation-link"
+    >
+      Gameplay
+    </RouterLink>
   </nav>
 </template>
 
