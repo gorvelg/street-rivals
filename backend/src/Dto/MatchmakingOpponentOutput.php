@@ -32,6 +32,12 @@ final readonly class MatchmakingOpponentOutput
         public string $color,
 
         #[Groups(['matchmaking:read'])]
+        public string $bodyStyle,
+
+        #[Groups(['matchmaking:read'])]
+        public string $wheelStyle,
+
+        #[Groups(['matchmaking:read'])]
         public int $level,
 
         #[Groups(['matchmaking:read'])]

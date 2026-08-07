@@ -122,6 +122,10 @@ export interface MatchmakingOpponent {
     carId: number
     pilotName: string
     color: string
+
+    bodyStyle: CarBodyStyle
+    wheelStyle: CarWheelStyle
+
     level: number
     levelDifference: number
 
@@ -244,6 +248,14 @@ export interface DuelCarSnapshot {
     carId: number
     pilotName: string
     color: string
+
+    /*
+     * Optionnels pour pouvoir encore relire
+     * les anciens replays 1.2.0.
+     */
+    bodyStyle?: CarBodyStyle
+    wheelStyle?: CarWheelStyle
+
     level: number
 
     base: {
@@ -364,10 +376,14 @@ export interface PendingDuel {
     attackerCarId: number
     attackerPilotName: string
     attackerColor: string
+    attackerBodyStyle: CarBodyStyle
+    attackerWheelStyle: CarWheelStyle
 
     defenderCarId: number
     defenderPilotName: string
     defenderColor: string
+    defenderBodyStyle: CarBodyStyle
+    defenderWheelStyle: CarWheelStyle
 
     difficulty: OpponentDifficulty
 }

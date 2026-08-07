@@ -29,83 +29,154 @@ final class MatchmakingService
     /**
      * @return list<MatchmakingOpponentOutput>
      */
-    public function findOpponents(Car $referenceCar): array
-    {
-        $referenceStats = $this->statsCalculator
-            ->calculate($referenceCar);
+    public function findOpponents(
+        Car $referenceCar,
+    ): array {
+        $referenceStats =
+            $this->statsCalculator
+                ->calculate(
+                    $referenceCar,
+                );
 
-        $referencePower = $this->calculatePowerScore(
-            $referenceStats->effective
-        );
-
-        $candidates = $this->carRepository
-            ->findMatchmakingCandidates(
-                referenceCar: $referenceCar,
-                levelRange: self::LEVEL_RANGE,
-                limit: self::PRESELECTION_LIMIT,
+        $referencePower =
+            $this->calculatePowerScore(
+                $referenceStats->effective,
             );
+
+        $candidates =
+            $this->carRepository
+                ->findMatchmakingCandidates(
+                    referenceCar:
+                    $referenceCar,
+
+                    levelRange:
+                    self::LEVEL_RANGE,
+
+                    limit:
+                    self::PRESELECTION_LIMIT,
+                );
 
         $rankedOpponents = [];
 
-        foreach ($candidates as $candidate) {
-            $candidateStats = $this->statsCalculator
-                ->calculate($candidate);
+        foreach (
+            $candidates as $candidate
+        ) {
+            $candidateStats =
+                $this->statsCalculator
+                    ->calculate(
+                        $candidate,
+                    );
 
-            $candidatePower = $this->calculatePowerScore(
-                $candidateStats->effective
-            );
+            $candidatePower =
+                $this->calculatePowerScore(
+                    $candidateStats->effective,
+                );
 
-            $powerDifferencePercent = round(
-                (
-                    ($candidatePower - $referencePower)
-                    / max(1, $referencePower)
-                ) * 100,
-                2
-            );
+            $powerDifferencePercent =
+                round(
+                    (
+                        (
+                            $candidatePower
+                            - $referencePower
+                        )
+                        / max(
+                            1,
+                            $referencePower,
+                        )
+                    ) * 100,
+                    2,
+                );
 
             $levelDifference =
                 $candidate->getLevel()
                 - $referenceCar->getLevel();
 
-            $candidateId = $candidate->getId();
+            $candidateId =
+                $candidate->getId();
 
             if ($candidateId === null) {
                 continue;
             }
 
-            $output = new MatchmakingOpponentOutput(
-                carId: $candidateId,
-                pilotName: $candidate->getPilotName() ?? '',
-                color: $candidate->getColor() ?? '#000000',
-                level: $candidate->getLevel(),
-                levelDifference: $levelDifference,
-                effectiveStats: $candidateStats->effective,
-                powerScore: $candidatePower,
-                powerDifferencePercent: $powerDifferencePercent,
-                difficulty: $this->resolveDifficulty(
-                    $powerDifferencePercent
-                ),
-                potentialRewards: [
-                    'victory' => [
-                        'xp' => DuelRewardCalculator::WINNER_XP,
-                        'money' => DuelRewardCalculator::WINNER_MONEY,
+            $output =
+                new MatchmakingOpponentOutput(
+                    carId:
+                    $candidateId,
+
+                    pilotName:
+                    $candidate->getPilotName()
+                    ?? '',
+
+                    color:
+                    $candidate->getColor()
+                    ?? '#000000',
+
+                    bodyStyle:
+                    $candidate
+                        ->getBodyStyle()
+                        ->value,
+
+                    wheelStyle:
+                    $candidate
+                        ->getWheelStyle()
+                        ->value,
+
+                    level:
+                    $candidate->getLevel(),
+
+                    levelDifference:
+                    $levelDifference,
+
+                    effectiveStats:
+                    $candidateStats
+                        ->effective,
+
+                    powerScore:
+                    $candidatePower,
+
+                    powerDifferencePercent:
+                    $powerDifferencePercent,
+
+                    difficulty:
+                    $this->resolveDifficulty(
+                        $powerDifferencePercent,
+                    ),
+
+                    potentialRewards: [
+                        'victory' => [
+                            'xp' =>
+                                DuelRewardCalculator::WINNER_XP,
+
+                            'money' =>
+                                DuelRewardCalculator::WINNER_MONEY,
+                        ],
+
+                        'defeat' => [
+                            'xp' =>
+                                DuelRewardCalculator::LOSER_XP,
+
+                            'money' =>
+                                DuelRewardCalculator::LOSER_MONEY,
+                        ],
                     ],
-                    'defeat' => [
-                        'xp' => DuelRewardCalculator::LOSER_XP,
-                        'money' => DuelRewardCalculator::LOSER_MONEY,
-                    ],
-                ],
-            );
+                );
 
             $rankedOpponents[] = [
-                'output' => $output,
-                'absolutePowerDifference' => abs(
-                    $powerDifferencePercent
-                ),
-                'absoluteLevelDifference' => abs(
-                    $levelDifference
-                ),
-                'carId' => $candidateId,
+                'output' =>
+                    $output,
+
+                'absolutePowerDifference' =>
+                    abs(
+                        $powerDifferencePercent,
+                    ),
+
+                'absoluteLevelDifference' =>
+                    abs(
+                        $levelDifference,
+                    ),
+
+                'carId' =>
+                    $candidateId,
             ];
         }
 
@@ -118,37 +189,62 @@ final class MatchmakingService
          */
         usort(
             $rankedOpponents,
-            static function (array $first, array $second): int {
-                $powerComparison =
-                    $first['absolutePowerDifference']
-                    <=> $second['absolutePowerDifference'];
 
-                if ($powerComparison !== 0) {
+            static function (
+                array $first,
+                array $second,
+            ): int {
+                $powerComparison =
+                    $first[
+                    'absolutePowerDifference'
+                    ]
+                    <=>
+                    $second[
+                    'absolutePowerDifference'
+                    ];
+
+                if (
+                    $powerComparison !== 0
+                ) {
                     return $powerComparison;
                 }
 
                 $levelComparison =
-                    $first['absoluteLevelDifference']
-                    <=> $second['absoluteLevelDifference'];
+                    $first[
+                    'absoluteLevelDifference'
+                    ]
+                    <=>
+                    $second[
+                    'absoluteLevelDifference'
+                    ];
 
-                if ($levelComparison !== 0) {
+                if (
+                    $levelComparison !== 0
+                ) {
                     return $levelComparison;
                 }
 
-                return $first['carId'] <=> $second['carId'];
-            }
+                return
+                    $first['carId']
+                    <=>
+                    $second['carId'];
+            },
         );
 
-        $rankedOpponents = array_slice(
-            $rankedOpponents,
-            0,
-            self::MAXIMUM_OPPONENTS
-        );
+        $rankedOpponents =
+            array_slice(
+                $rankedOpponents,
+                0,
+                self::MAXIMUM_OPPONENTS,
+            );
 
         return array_map(
-            static fn (array $entry): MatchmakingOpponentOutput =>
+            static fn (
+                array $entry,
+            ): MatchmakingOpponentOutput =>
             $entry['output'],
-            $rankedOpponents
+
+            $rankedOpponents,
         );
     }
 
@@ -161,7 +257,7 @@ final class MatchmakingService
      * } $effectiveStats
      */
     private function calculatePowerScore(
-        array $effectiveStats
+        array $effectiveStats,
     ): int {
         return
             $effectiveStats['speed']
@@ -171,7 +267,7 @@ final class MatchmakingService
     }
 
     private function resolveDifficulty(
-        float $powerDifferencePercent
+        float $powerDifferencePercent,
     ): string {
         if (
             $powerDifferencePercent

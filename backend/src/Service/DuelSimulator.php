@@ -13,7 +13,7 @@ use App\Repository\CarCardRepository;
 
 final class DuelSimulator
 {
-    public const ENGINE_VERSION = '1.2.0';
+    public const ENGINE_VERSION = '1.3.0';
 
     private const MAXIMUM_GAP_CHANGE = 5;
 
@@ -847,6 +847,19 @@ final class DuelSimulator
 
             'color' =>
                 $car->getColor(),
+
+            'bodyStyle' =>
+                $car
+                    ->getBodyStyle()
+                    ->value,
+
+            'wheelStyle' =>
+                $car
+                    ->getWheelStyle()
+                    ->value,
+
+            'level' =>
+                $stats->level,
 
             'level' =>
                 $stats->level,

@@ -14,6 +14,8 @@ import {
   getCollectionMembers,
 } from '../services/api'
 import { useDuelStore } from '../stores/duel'
+import CarVisual
+  from '../components/CarVisual.vue'
 import type {
   ApiCollection,
   ApiRelation,
@@ -454,42 +456,68 @@ onBeforeUnmount(() => {
           v-if="duelStore.duel === null"
           class="panel duel-preview"
       >
-        <div class="versus-grid">
-          <div class="versus-car">
-            <div
-                class="versus-color"
-                :style="{
-                backgroundColor:
-                  pendingDuel.attackerColor,
-              }"
+        <div class="versus-car">
+          <div class="versus-car-visual">
+            <CarVisual
+                :color="
+          pendingDuel.attackerColor
+        "
+                :body-style="
+          pendingDuel.attackerBodyStyle
+        "
+                :wheel-style="
+          pendingDuel.attackerWheelStyle
+        "
+                :pilot-name="
+          pendingDuel.attackerPilotName
+        "
             />
-
-            <span>Attaquant</span>
-
-            <strong>
-              {{ pendingDuel.attackerPilotName }}
-            </strong>
           </div>
 
-          <div class="versus-symbol">
-            VS
-          </div>
+          <span>
+    Attaquant
+  </span>
 
-          <div class="versus-car">
-            <div
-                class="versus-color"
-                :style="{
-                backgroundColor:
-                  pendingDuel.defenderColor,
-              }"
+          <strong>
+            {{
+              pendingDuel
+                  .attackerPilotName
+            }}
+          </strong>
+        </div>
+
+        <div class="versus-symbol">
+          VS
+        </div>
+
+        <div class="versus-car">
+          <div class="versus-car-visual">
+            <CarVisual
+                :color="
+          pendingDuel.defenderColor
+        "
+                :body-style="
+          pendingDuel.defenderBodyStyle
+        "
+                :wheel-style="
+          pendingDuel.defenderWheelStyle
+        "
+                :pilot-name="
+          pendingDuel.defenderPilotName
+        "
             />
-
-            <span>Défenseur</span>
-
-            <strong>
-              {{ pendingDuel.defenderPilotName }}
-            </strong>
           </div>
+
+          <span>
+    Défenseur
+  </span>
+
+          <strong>
+            {{
+              pendingDuel
+                  .defenderPilotName
+            }}
+          </strong>
         </div>
 
         <p class="duel-difficulty">
@@ -570,29 +598,79 @@ onBeforeUnmount(() => {
 
           <div class="race-track">
             <div class="race-lane">
-              <span
-                  class="race-runner"
+              <div
+                  class="
+      race-runner
+      race-runner-attacker
+    "
                   :style="{
-                  left: `${attackerPosition}%`,
-                  backgroundColor:
-                    duelStore.duel.attackerSnapshot.color,
-                }"
+      left:
+        `${attackerPosition}%`,
+    }"
               >
-                A
-              </span>
+                <CarVisual
+                    :color="
+        duelStore.duel
+            .attackerSnapshot
+            .color
+      "
+                    :body-style="
+        duelStore.duel
+            .attackerSnapshot
+            .bodyStyle
+        ?? 'coupe_01'
+      "
+                    :wheel-style="
+        duelStore.duel
+            .attackerSnapshot
+            .wheelStyle
+        ?? 'street_01'
+      "
+                    :pilot-name="
+        duelStore.duel
+            .attackerSnapshot
+            .pilotName
+      "
+                />
+              </div>
             </div>
 
             <div class="race-lane">
-              <span
-                  class="race-runner"
+              <div
+                  class="
+      race-runner
+      race-runner-defender
+    "
                   :style="{
-                  left: `${defenderPosition}%`,
-                  backgroundColor:
-                    duelStore.duel.defenderSnapshot.color,
-                }"
+      left:
+        `${defenderPosition}%`,
+    }"
               >
-                D
-              </span>
+                <CarVisual
+                    :color="
+        duelStore.duel
+            .defenderSnapshot
+            .color
+      "
+                    :body-style="
+        duelStore.duel
+            .defenderSnapshot
+            .bodyStyle
+        ?? 'coupe_01'
+      "
+                    :wheel-style="
+        duelStore.duel
+            .defenderSnapshot
+            .wheelStyle
+        ?? 'street_01'
+      "
+                    :pilot-name="
+        duelStore.duel
+            .defenderSnapshot
+            .pilotName
+      "
+                />
+              </div>
             </div>
 
             <div class="race-progress">
@@ -747,3 +825,51 @@ onBeforeUnmount(() => {
     </template>
   </section>
 </template>
+<style scoped>
+.versus-car-visual {
+  width: 100%;
+  max-width: 360px;
+
+  margin: 0 auto 8px;
+}
+
+.versus-car {
+  min-width: 0;
+}
+.race-runner {
+  position: absolute;
+
+  width: 110px;
+
+  transform:
+      translateX(-50%);
+
+  transition:
+      left
+      700ms
+      cubic-bezier(
+          0.22,
+          0.61,
+          0.36,
+          1
+      );
+
+  z-index: 2;
+}
+
+.race-runner-attacker {
+  bottom: -15px;
+}
+
+.race-runner-defender {
+  bottom: -15px;
+}
+
+@media (
+max-width: 650px
+) {
+  .race-runner {
+    width: 75px;
+  }
+}
+</style>

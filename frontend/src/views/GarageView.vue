@@ -629,8 +629,7 @@ function selectOpponent(
   selectedOpponent.value =
       opponent
 
-  const pendingDuel:
-      PendingDuel = {
+  const pendingDuel: PendingDuel = {
     attackerCarId:
     selectedCarId.value,
 
@@ -640,6 +639,12 @@ function selectOpponent(
     attackerColor:
     selectedCar.value.color,
 
+    attackerBodyStyle:
+    selectedCar.value.bodyStyle,
+
+    attackerWheelStyle:
+    selectedCar.value.wheelStyle,
+
     defenderCarId:
     opponent.carId,
 
@@ -648,6 +653,12 @@ function selectOpponent(
 
     defenderColor:
     opponent.color,
+
+    defenderBodyStyle:
+    opponent.bodyStyle,
+
+    defenderWheelStyle:
+    opponent.wheelStyle,
 
     difficulty:
     opponent.difficulty,
