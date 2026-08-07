@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { Card } from '../types/api'
+import type {
+  Card,
+  CardKind,
+  EquipmentSlot,
+} from '../types/api'
 
 defineProps<{
   level: number
@@ -12,7 +16,130 @@ defineEmits<{
   select: [cardId: number]
 }>()
 
-function formatEffect(card: Card): string {
+function getKind(
+    card: Card,
+): CardKind {
+  return card.kind ?? 'ability'
+}
+
+function kindLabel(
+    card: Card,
+): string {
+  switch (getKind(card)) {
+    case 'equipment':
+      return 'Équipement'
+
+    case 'stat_boost':
+      return 'Bonus permanent'
+
+    case 'ability':
+    default:
+      return 'Capacité'
+  }
+}
+
+function equipmentSlotLabel(
+    slot: EquipmentSlot | null | undefined,
+): string | null {
+  switch (slot) {
+    case 'engine':
+      return 'Moteur'
+
+    case 'wheels':
+      return 'Roues'
+
+    case 'brakes':
+      return 'Freins'
+
+    case 'gearbox':
+      return 'Boîte de vitesses'
+
+    case 'chassis':
+      return 'Châssis'
+
+    case 'aero':
+      return 'Aérodynamique'
+
+    default:
+      return null
+  }
+}
+
+function statLabel(
+    stat: string,
+): string {
+  switch (stat) {
+    case 'speed':
+      return 'vitesse'
+
+    case 'acceleration':
+      return 'accélération'
+
+    case 'grip':
+      return 'grip'
+
+    case 'solidity':
+      return 'solidité'
+
+    default:
+      return stat
+  }
+}
+
+function signedValue(
+    value: number,
+): string {
+  if (value > 0) {
+    return `+${value}`
+  }
+
+  return String(value)
+}
+
+function formatStatTiers(
+    card: Card,
+): string {
+  const tiers = card.effectConfig.tiers
+
+  if (
+      typeof tiers !== 'object'
+      || tiers === null
+  ) {
+    return card.description
+  }
+
+  const tierConfigurations =
+      tiers as Record<
+          string,
+          Record<string, unknown>
+      >
+
+  return Object.entries(
+      tierConfigurations,
+  )
+      .map(([tier, configuration]) => {
+        const effects = Object.entries(
+            configuration,
+        )
+            .filter(
+                (
+                    entry,
+                ): entry is [string, number] =>
+                    typeof entry[1] === 'number',
+            )
+            .map(([stat, value]) => {
+              return `${signedValue(value)} ${statLabel(stat)}`
+            })
+            .join(', ')
+
+        return `T${tier} : ${effects}`
+      })
+      .join(' · ')
+}
+
+function formatLegacyAbilityEffect(
+    card: Card,
+): string {
   const config = card.effectConfig
 
   const stat =
@@ -28,8 +155,8 @@ function formatEffect(card: Card): string {
   const tiers = config.tiers
 
   if (
-      typeof tiers !== 'object' ||
-      tiers === null
+      typeof tiers !== 'object'
+      || tiers === null
   ) {
     return card.description
   }
@@ -46,7 +173,7 @@ function formatEffect(card: Card): string {
       .map(([tier, value]) => {
         const bonus =
             typeof value.value === 'number'
-                ? `+${value.value}`
+                ? signedValue(value.value)
                 : ''
 
         return `T${tier} ${bonus}`
@@ -54,7 +181,10 @@ function formatEffect(card: Card): string {
       .join(' · ')
 
   const target = [
-    stat,
+    stat !== null
+        ? statLabel(stat)
+        : null,
+
     event !== null
         ? `sur ${event}`
         : null,
@@ -62,7 +192,24 @@ function formatEffect(card: Card): string {
       .filter(Boolean)
       .join(' ')
 
+  if (target === '') {
+    return tierValues
+  }
+
   return `${target} — ${tierValues}`
+}
+
+function formatEffect(
+    card: Card,
+): string {
+  if (
+      getKind(card) === 'equipment'
+      || getKind(card) === 'stat_boost'
+  ) {
+    return formatStatTiers(card)
+  }
+
+  return formatLegacyAbilityEffect(card)
 }
 </script>
 
@@ -70,9 +217,13 @@ function formatEffect(card: Card): string {
   <section class="card-choice-panel">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">Niveau {{ level }}</p>
+        <p class="eyebrow">
+          Niveau {{ level }}
+        </p>
 
-        <h2>Choisis une amélioration</h2>
+        <h2>
+          Choisis une amélioration
+        </h2>
       </div>
     </div>
 
@@ -93,17 +244,45 @@ function formatEffect(card: Card): string {
           </span>
 
           <span class="card-type">
-            {{ card.type }}
+            {{ kindLabel(card) }}
           </span>
         </header>
 
-        <h3>{{ card.name }}</h3>
+        <p
+            v-if="
+              getKind(card) === 'equipment'
+              && equipmentSlotLabel(
+                card.equipmentSlot,
+              ) !== null
+            "
+            class="equipment-slot"
+        >
+          {{
+            equipmentSlotLabel(
+                card.equipmentSlot,
+            )
+          }}
+        </p>
 
-        <p>{{ card.description }}</p>
+        <h3>
+          {{ card.name }}
+        </h3>
+
+        <p>
+          {{ card.description }}
+        </p>
 
         <small>
           {{ formatEffect(card) }}
         </small>
+
+        <p
+            v-if="card.maxTier !== undefined"
+            class="muted"
+        >
+          Palier maximum :
+          {{ card.maxTier }}
+        </p>
 
         <button
             type="button"

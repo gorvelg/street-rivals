@@ -6,7 +6,9 @@ import { defineStore } from 'pinia'
 import { apiRequest } from '../services/api'
 import type {
     AdminCardDetail,
+    AdminCardKind,
     AdminCardUpdateResponse,
+    AdminEquipmentSlot,
 } from '../types/admin'
 
 export const useAdminCardDetailStore = defineStore(
@@ -24,21 +26,32 @@ export const useAdminCardDetailStore = defineStore(
         const equippedOnly = ref<boolean>(false)
 
         /*
-         * Formulaire d’édition.
+         * Formulaire d'édition.
          */
         const editName = ref<string>('')
         const editType = ref<string>('')
         const editRarity = ref<string>('')
 
+        const editKind =
+            ref<AdminCardKind>('ability')
+
+        const editEquipmentSlot =
+            ref<AdminEquipmentSlot | ''>('')
+
+        const editMaxTier =
+            ref<number>(3)
+
         const editEffectConfigText =
             ref<string>('{}')
 
-        const isLoading = ref<boolean>(false)
-        const isSaving = ref<boolean>(false)
+        const isLoading =
+            ref<boolean>(false)
 
-        const errorMessage = ref<string | null>(
-            null,
-        )
+        const isSaving =
+            ref<boolean>(false)
+
+        const errorMessage =
+            ref<string | null>(null)
 
         const saveErrorMessage =
             ref<string | null>(null)
@@ -49,76 +62,143 @@ export const useAdminCardDetailStore = defineStore(
         const successMessage =
             ref<string | null>(null)
 
-        const lastChangedFields = ref<string[]>([])
+        const lastChangedFields =
+            ref<string[]>([])
 
-        const isDirty = computed<boolean>(() => {
-            if (detail.value === null) {
-                return false
-            }
+        /*
+         * Un emplacement n'a de sens que
+         * pour un équipement.
+         */
+        const equipmentSlotRequired =
+            computed<boolean>(() => {
+                return editKind.value
+                    === 'equipment'
+            })
 
-            const currentCard = detail.value.card
+        const isDirty =
+            computed<boolean>(() => {
+                if (detail.value === null) {
+                    return false
+                }
 
-            if (
-                editName.value.trim()
-                !== currentCard.name
-            ) {
-                return true
-            }
-
-            if (
-                editType.value.trim()
-                !== currentCard.type
-            ) {
-                return true
-            }
-
-            if (
-                editRarity.value.trim()
-                !== currentCard.rarity
-            ) {
-                return true
-            }
-
-            try {
-                const parsedConfiguration =
-                    JSON.parse(
-                        editEffectConfigText.value,
-                    ) as unknown
+                const currentCard =
+                    detail.value.card
 
                 if (
-                    parsedConfiguration === null
-                    || typeof parsedConfiguration
-                    !== 'object'
-                    || Array.isArray(parsedConfiguration)
+                    editName.value.trim()
+                    !== currentCard.name
                 ) {
                     return true
                 }
 
-                return JSON.stringify(
-                    parsedConfiguration,
-                ) !== JSON.stringify(
-                    currentCard.effectConfig,
-                )
-            } catch {
-                return true
-            }
-        })
+                if (
+                    editType.value.trim()
+                    !== currentCard.type
+                ) {
+                    return true
+                }
+
+                if (
+                    editRarity.value.trim()
+                    !== currentCard.rarity
+                ) {
+                    return true
+                }
+
+                if (
+                    editKind.value
+                    !== currentCard.kind
+                ) {
+                    return true
+                }
+
+                const normalizedSlot =
+                    editKind.value === 'equipment'
+                        ? editEquipmentSlot.value || null
+                        : null
+
+                if (
+                    normalizedSlot
+                    !== currentCard.equipmentSlot
+                ) {
+                    return true
+                }
+
+                if (
+                    editMaxTier.value
+                    !== currentCard.maxTier
+                ) {
+                    return true
+                }
+
+                try {
+                    const parsedConfiguration =
+                        JSON.parse(
+                            editEffectConfigText.value,
+                        ) as unknown
+
+                    if (
+                        parsedConfiguration === null
+                        || typeof parsedConfiguration
+                        !== 'object'
+                        || Array.isArray(
+                            parsedConfiguration,
+                        )
+                    ) {
+                        return true
+                    }
+
+                    return JSON.stringify(
+                        parsedConfiguration,
+                    ) !== JSON.stringify(
+                        currentCard.effectConfig,
+                    )
+                } catch {
+                    return true
+                }
+            })
 
         function synchronizeEditForm(): void {
             if (detail.value === null) {
                 editName.value = ''
                 editType.value = ''
                 editRarity.value = ''
-                editEffectConfigText.value = '{}'
+
+                editKind.value =
+                    'ability'
+
+                editEquipmentSlot.value =
+                    ''
+
+                editMaxTier.value =
+                    3
+
+                editEffectConfigText.value =
+                    '{}'
 
                 return
             }
 
-            const card = detail.value.card
+            const card =
+                detail.value.card
 
-            editName.value = card.name
-            editType.value = card.type
-            editRarity.value = card.rarity
+            editName.value =
+                card.name
+
+            editType.value =
+                card.type
+
+            editRarity.value =
+                card.rarity
+
+            editKind.value =
+                card.kind
+
+            editEquipmentSlot.value =
+                card.equipmentSlot ?? ''
+
+            editMaxTier.value =
+                card.maxTier
 
             editEffectConfigText.value =
                 JSON.stringify(
@@ -129,15 +209,38 @@ export const useAdminCardDetailStore = defineStore(
         }
 
         function clearEditMessages(): void {
-            saveErrorMessage.value = null
-            validationMessage.value = null
-            successMessage.value = null
-            lastChangedFields.value = []
+            saveErrorMessage.value =
+                null
+
+            validationMessage.value =
+                null
+
+            successMessage.value =
+                null
+
+            lastChangedFields.value =
+                []
         }
 
         function resetEditForm(): void {
             clearEditMessages()
             synchronizeEditForm()
+        }
+
+        function changeKind(): void {
+            /*
+             * Dès que l'on quitte EQUIPMENT,
+             * on retire le slot du formulaire.
+             */
+            if (
+                editKind.value
+                !== 'equipment'
+            ) {
+                editEquipmentSlot.value =
+                    ''
+            }
+
+            clearEditMessages()
         }
 
         async function loadCard(
@@ -150,12 +253,17 @@ export const useAdminCardDetailStore = defineStore(
 
             const queryParameters =
                 new URLSearchParams({
-                    page: String(requestedPage),
+                    page:
+                        String(requestedPage),
 
-                    itemsPerPage: String(
-                        detail.value?.holders.pagination
-                            .itemsPerPage ?? 20,
-                    ),
+                    itemsPerPage:
+                        String(
+                            detail.value
+                                ?.holders
+                                .pagination
+                                .itemsPerPage
+                            ?? 20,
+                        ),
                 })
 
             const normalizedSearch =
@@ -168,14 +276,20 @@ export const useAdminCardDetailStore = defineStore(
                 )
             }
 
+            const parsedTier =
+                Number.parseInt(
+                    tier.value,
+                    10,
+                )
+
             if (
-                tier.value === '1'
-                || tier.value === '2'
-                || tier.value === '3'
+                Number.isInteger(parsedTier)
+                && parsedTier >= 1
+                && parsedTier <= 10
             ) {
                 queryParameters.set(
                     'tier',
-                    tier.value,
+                    String(parsedTier),
                 )
             }
 
@@ -188,7 +302,9 @@ export const useAdminCardDetailStore = defineStore(
 
             try {
                 detail.value =
-                    await apiRequest<AdminCardDetail>(
+                    await apiRequest<
+                        AdminCardDetail
+                    >(
                         `/api/admin/cards/${cardId}?${queryParameters.toString()}`,
                     )
 
@@ -209,7 +325,9 @@ export const useAdminCardDetailStore = defineStore(
 
         async function saveCard(
             cardId: number,
-        ): Promise<AdminCardUpdateResponse | null> {
+        ): Promise<
+            AdminCardUpdateResponse | null
+        > {
             if (detail.value === null) {
                 return null
             }
@@ -239,9 +357,36 @@ export const useAdminCardDetailStore = defineStore(
                 return null
             }
 
-            if (normalizedRarity === '') {
+            if (
+                normalizedRarity === ''
+            ) {
                 validationMessage.value =
                     'La rareté ne peut pas être vide.'
+
+                return null
+            }
+
+            if (
+                !Number.isInteger(
+                    editMaxTier.value,
+                )
+                || editMaxTier.value < 1
+                || editMaxTier.value > 10
+            ) {
+                validationMessage.value =
+                    'Le palier maximal doit être compris entre 1 et 10.'
+
+                return null
+            }
+
+            if (
+                editKind.value
+                === 'equipment'
+                && editEquipmentSlot.value
+                === ''
+            ) {
+                validationMessage.value =
+                    'Un équipement doit posséder un emplacement.'
 
                 return null
             }
@@ -249,9 +394,10 @@ export const useAdminCardDetailStore = defineStore(
             let parsedEffectConfig: unknown
 
             try {
-                parsedEffectConfig = JSON.parse(
-                    editEffectConfigText.value,
-                )
+                parsedEffectConfig =
+                    JSON.parse(
+                        editEffectConfigText.value,
+                    )
             } catch {
                 validationMessage.value =
                     'La configuration des effets contient un JSON invalide.'
@@ -263,7 +409,9 @@ export const useAdminCardDetailStore = defineStore(
                 parsedEffectConfig === null
                 || typeof parsedEffectConfig
                 !== 'object'
-                || Array.isArray(parsedEffectConfig)
+                || Array.isArray(
+                    parsedEffectConfig,
+                )
             ) {
                 validationMessage.value =
                     'La configuration des effets doit être un objet JSON.'
@@ -277,7 +425,8 @@ export const useAdminCardDetailStore = defineStore(
                     unknown
                 >
 
-            const currentCard = detail.value.card
+            const currentCard =
+                detail.value.card
 
             const payload: Record<
                 string,
@@ -288,34 +437,79 @@ export const useAdminCardDetailStore = defineStore(
                 normalizedName
                 !== currentCard.name
             ) {
-                payload.name = normalizedName
+                payload.name =
+                    normalizedName
             }
 
             if (
                 normalizedType
                 !== currentCard.type
             ) {
-                payload.type = normalizedType
+                payload.type =
+                    normalizedType
             }
 
             if (
                 normalizedRarity
                 !== currentCard.rarity
             ) {
-                payload.rarity = normalizedRarity
+                payload.rarity =
+                    normalizedRarity
             }
 
             if (
-                JSON.stringify(effectConfig)
+                editKind.value
+                !== currentCard.kind
+            ) {
+                payload.kind =
+                    editKind.value
+            }
+
+            /*
+             * Un slot est forcément null
+             * hors EQUIPMENT.
+             */
+            const normalizedEquipmentSlot:
+                AdminEquipmentSlot | null =
+                editKind.value
+                === 'equipment'
+                    ? (
+                        editEquipmentSlot.value
+                        || null
+                    )
+                    : null
+
+            if (
+                normalizedEquipmentSlot
+                !== currentCard.equipmentSlot
+            ) {
+                payload.equipmentSlot =
+                    normalizedEquipmentSlot
+            }
+
+            if (
+                editMaxTier.value
+                !== currentCard.maxTier
+            ) {
+                payload.maxTier =
+                    editMaxTier.value
+            }
+
+            if (
+                JSON.stringify(
+                    effectConfig,
+                )
                 !== JSON.stringify(
                     currentCard.effectConfig,
                 )
             ) {
-                payload.effectConfig = effectConfig
+                payload.effectConfig =
+                    effectConfig
             }
 
             if (
-                Object.keys(payload).length === 0
+                Object.keys(payload)
+                    .length === 0
             ) {
                 successMessage.value =
                     'Aucune modification à enregistrer.'
@@ -327,7 +521,9 @@ export const useAdminCardDetailStore = defineStore(
 
             try {
                 const response =
-                    await apiRequest<AdminCardUpdateResponse>(
+                    await apiRequest<
+                        AdminCardUpdateResponse
+                    >(
                         `/api/admin/cards/${cardId}`,
                         {
                             method: 'PATCH',
@@ -337,14 +533,17 @@ export const useAdminCardDetailStore = defineStore(
                                     'application/json',
                             },
 
-                            body: JSON.stringify(payload),
+                            body:
+                                JSON.stringify(
+                                    payload,
+                                ),
                         },
                     )
 
                 /*
-                 * La réponse PATCH ne contient pas les
-                 * statistiques d’utilisation. On conserve
-                 * donc celles déjà présentes dans la fiche.
+                 * Les statistiques d'utilisation
+                 * restent celles déjà présentes
+                 * dans AdminCardDetail.
                  */
                 detail.value.card = {
                     ...detail.value.card,
@@ -352,15 +551,14 @@ export const useAdminCardDetailStore = defineStore(
                 }
 
                 lastChangedFields.value =
-                    Object.keys(response.changes)
+                    Object.keys(
+                        response.changes,
+                    )
 
-                if (response.updated) {
-                    successMessage.value =
-                        'La carte a été mise à jour.'
-                } else {
-                    successMessage.value =
-                        'Aucune modification n’a été appliquée.'
-                }
+                successMessage.value =
+                    response.updated
+                        ? 'La carte a été mise à jour.'
+                        : 'Aucune modification n’a été appliquée.'
 
                 synchronizeEditForm()
 
@@ -405,7 +603,9 @@ export const useAdminCardDetailStore = defineStore(
             cardId: number,
         ): Promise<void> {
             const pagination =
-                detail.value?.holders.pagination
+                detail.value
+                    ?.holders
+                    .pagination
 
             if (
                 isLoading.value
@@ -426,7 +626,9 @@ export const useAdminCardDetailStore = defineStore(
             cardId: number,
         ): Promise<void> {
             const pagination =
-                detail.value?.holders.pagination
+                detail.value
+                    ?.holders
+                    .pagination
 
             if (
                 isLoading.value
@@ -454,7 +656,18 @@ export const useAdminCardDetailStore = defineStore(
             editName.value = ''
             editType.value = ''
             editRarity.value = ''
-            editEffectConfigText.value = '{}'
+
+            editKind.value =
+                'ability'
+
+            editEquipmentSlot.value =
+                ''
+
+            editMaxTier.value =
+                3
+
+            editEffectConfigText.value =
+                '{}'
 
             isLoading.value = false
             isSaving.value = false
@@ -464,7 +677,8 @@ export const useAdminCardDetailStore = defineStore(
             validationMessage.value = null
             successMessage.value = null
 
-            lastChangedFields.value = []
+            lastChangedFields.value =
+                []
         }
 
         return {
@@ -477,7 +691,14 @@ export const useAdminCardDetailStore = defineStore(
             editName,
             editType,
             editRarity,
+
+            editKind,
+            editEquipmentSlot,
+            editMaxTier,
+
             editEffectConfigText,
+
+            equipmentSlotRequired,
 
             isLoading,
             isSaving,
@@ -495,6 +716,7 @@ export const useAdminCardDetailStore = defineStore(
             synchronizeEditForm,
             resetEditForm,
             clearEditMessages,
+            changeKind,
 
             submitFilters,
             clearFilters,

@@ -37,12 +37,33 @@ export interface Car {
     winRate?: number
 }
 
+export type CardKind =
+    | 'ability'
+    | 'equipment'
+    | 'stat_boost'
+
+export type EquipmentSlot =
+    | 'engine'
+    | 'wheels'
+    | 'brakes'
+    | 'gearbox'
+    | 'chassis'
+    | 'aero'
+
 export interface AppliedCard {
     carCardId: number
     cardId: number
     code: string
     name: string
+
+    kind?: CardKind
+
+    equipmentSlot?: EquipmentSlot | null
+
     tier: number
+
+    equipped?: boolean
+
     stat: string
     value: number
 }
@@ -110,12 +131,21 @@ export interface MatchmakingOpponent {
 }
 export interface Card {
     '@id'?: string
+
     id: number
     code: string
     name: string
     description: string
     rarity: string
+
     type: 'PASSIVE' | 'ACTIVE'
+
+    kind?: CardKind
+
+    equipmentSlot?: EquipmentSlot | null
+
+    maxTier?: number
+
     effectConfig: Record<string, unknown>
 }
 
@@ -297,4 +327,52 @@ export interface PendingDuel {
     defenderColor: string
 
     difficulty: OpponentDifficulty
+}
+export interface CarInventoryCardData {
+    id: number
+    code: string
+    name: string
+    description: string
+    rarity: string
+
+    type: 'PASSIVE' | 'ACTIVE'
+
+    kind: CardKind
+
+    equipmentSlot: EquipmentSlot | null
+
+    maxTier: number
+
+    enabled: boolean
+
+    effectConfig: Record<string, unknown>
+}
+
+export interface CarInventoryCard {
+    carCardId: number
+    tier: number
+    equipped: boolean
+    acquiredLevel: number
+
+    card: CarInventoryCardData
+}
+
+export interface EquipCarCardResponse {
+    updated: boolean
+
+    equipped: {
+        carCardId: number
+        cardId: number
+        code: string
+        name: string
+        kind: CardKind
+        equipmentSlot: EquipmentSlot | null
+        tier: number
+        equipped: boolean
+        effectConfig: Record<string, unknown>
+    }
+
+    unequippedCarCardId: number | null
+
+    stats: CarStats
 }

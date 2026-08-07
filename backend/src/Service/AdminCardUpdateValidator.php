@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Enum\CardKind;
+use App\Enum\EquipmentSlot;
+use JsonException;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 final class AdminCardUpdateValidator
@@ -12,12 +15,18 @@ final class AdminCardUpdateValidator
         'name',
         'type',
         'rarity',
+        'kind',
+        'equipmentSlot',
+        'maxTier',
         'effectConfig',
     ];
 
     private const MAX_NAME_LENGTH = 120;
     private const MAX_TYPE_LENGTH = 60;
     private const MAX_RARITY_LENGTH = 60;
+
+    private const MIN_MAX_TIER = 1;
+    private const MAX_MAX_TIER = 10;
 
     private const MAX_JSON_DEPTH = 8;
     private const MAX_JSON_SIZE = 50_000;
@@ -31,6 +40,9 @@ final class AdminCardUpdateValidator
      *     name?: string,
      *     type?: string,
      *     rarity?: string,
+     *     kind?: string,
+     *     equipmentSlot?: string|null,
+     *     maxTier?: int,
      *     effectConfig?: array<mixed>
      * }
      */
@@ -43,6 +55,11 @@ final class AdminCardUpdateValidator
             );
         }
 
+        /*
+         * Refus de toute propriété que
+         * l'administration n'est pas autorisée
+         * à modifier.
+         */
         $unknownFields = array_diff(
             array_keys($payload),
             self::ALLOWED_FIELDS,
@@ -52,14 +69,25 @@ final class AdminCardUpdateValidator
             throw new UnprocessableEntityHttpException(
                 sprintf(
                     'Champ(s) non autorisé(s) : %s.',
-                    implode(', ', $unknownFields),
+                    implode(
+                        ', ',
+                        $unknownFields,
+                    ),
                 ),
             );
         }
 
         $normalizedPayload = [];
 
-        if (array_key_exists('name', $payload)) {
+        /*
+         * Nom
+         */
+        if (
+            array_key_exists(
+                'name',
+                $payload,
+            )
+        ) {
             $normalizedPayload['name'] =
                 $this->validateString(
                     value: $payload['name'],
@@ -69,7 +97,21 @@ final class AdminCardUpdateValidator
                 );
         }
 
-        if (array_key_exists('type', $payload)) {
+        /*
+         * Ancien type fonctionnel :
+         *
+         * PASSIVE
+         * ACTIVE
+         *
+         * On conserve ce champ pour le moteur
+         * de jeu existant.
+         */
+        if (
+            array_key_exists(
+                'type',
+                $payload,
+            )
+        ) {
             $normalizedPayload['type'] =
                 $this->validateString(
                     value: $payload['type'],
@@ -79,7 +121,15 @@ final class AdminCardUpdateValidator
                 );
         }
 
-        if (array_key_exists('rarity', $payload)) {
+        /*
+         * Rareté
+         */
+        if (
+            array_key_exists(
+                'rarity',
+                $payload,
+            )
+        ) {
             $normalizedPayload['rarity'] =
                 $this->validateString(
                     value: $payload['rarity'],
@@ -89,6 +139,66 @@ final class AdminCardUpdateValidator
                 );
         }
 
+        /*
+         * Nouvelle famille fonctionnelle :
+         *
+         * ability
+         * equipment
+         * stat_boost
+         */
+        if (
+            array_key_exists(
+                'kind',
+                $payload,
+            )
+        ) {
+            $normalizedPayload['kind'] =
+                $this->validateKind(
+                    $payload['kind'],
+                );
+        }
+
+        /*
+         * Slot d'équipement.
+         *
+         * null est accepté car une ABILITY
+         * ou un STAT_BOOST ne possède aucun slot.
+         *
+         * La cohérence finale avec "kind" sera
+         * contrôlée après application du PATCH par
+         * CardEffectConfigValidator.
+         */
+        if (
+            array_key_exists(
+                'equipmentSlot',
+                $payload,
+            )
+        ) {
+            $normalizedPayload[
+            'equipmentSlot'
+            ] = $this->validateEquipmentSlot(
+                $payload['equipmentSlot'],
+            );
+        }
+
+        /*
+         * Palier maximal propre à la carte.
+         */
+        if (
+            array_key_exists(
+                'maxTier',
+                $payload,
+            )
+        ) {
+            $normalizedPayload['maxTier'] =
+                $this->validateMaxTier(
+                    $payload['maxTier'],
+                );
+        }
+
+        /*
+         * Configuration JSON des effets.
+         */
         if (
             array_key_exists(
                 'effectConfig',
@@ -110,13 +220,23 @@ final class AdminCardUpdateValidator
                 depth: 0,
             );
 
-            $encodedConfiguration = json_encode(
-                $effectConfig,
-                JSON_THROW_ON_ERROR,
-            );
+            try {
+                $encodedConfiguration =
+                    json_encode(
+                        $effectConfig,
+                        JSON_THROW_ON_ERROR,
+                    );
+            } catch (JsonException $exception) {
+                throw new UnprocessableEntityHttpException(
+                    'La configuration des effets contient des données JSON invalides.',
+                    $exception,
+                );
+            }
 
             if (
-                strlen($encodedConfiguration)
+                strlen(
+                    $encodedConfiguration,
+                )
                 > self::MAX_JSON_SIZE
             ) {
                 throw new UnprocessableEntityHttpException(
@@ -127,11 +247,140 @@ final class AdminCardUpdateValidator
                 );
             }
 
-            $normalizedPayload['effectConfig'] =
-                $effectConfig;
+            $normalizedPayload[
+            'effectConfig'
+            ] = $effectConfig;
         }
 
         return $normalizedPayload;
+    }
+
+    private function validateKind(
+        mixed $value,
+    ): string {
+        if (!is_string($value)) {
+            throw new UnprocessableEntityHttpException(
+                'La nature de la carte doit être une chaîne de caractères.',
+            );
+        }
+
+        $normalizedValue = trim(
+            $value,
+        );
+
+        $kind = CardKind::tryFrom(
+            $normalizedValue,
+        );
+
+        if (!$kind instanceof CardKind) {
+            throw new UnprocessableEntityHttpException(
+                sprintf(
+                    'La nature "%s" est invalide. Valeurs autorisées : %s.',
+                    $normalizedValue,
+                    implode(
+                        ', ',
+                        array_map(
+                            static fn (
+                                CardKind $kind,
+                            ): string =>
+                            $kind->value,
+
+                            CardKind::cases(),
+                        ),
+                    ),
+                ),
+            );
+        }
+
+        return $kind->value;
+    }
+
+    private function validateEquipmentSlot(
+        mixed $value,
+    ): ?string {
+        /*
+         * null signifie :
+         *
+         * aucun emplacement.
+         */
+        if ($value === null) {
+            return null;
+        }
+
+        if (!is_string($value)) {
+            throw new UnprocessableEntityHttpException(
+                'L’emplacement d’équipement doit être une chaîne de caractères ou null.',
+            );
+        }
+
+        $normalizedValue = trim(
+            $value,
+        );
+
+        /*
+         * Une chaîne vide provenant par exemple
+         * d'un <select> HTML est normalisée en null.
+         */
+        if ($normalizedValue === '') {
+            return null;
+        }
+
+        $slot = EquipmentSlot::tryFrom(
+            $normalizedValue,
+        );
+
+        if (!$slot instanceof EquipmentSlot) {
+            throw new UnprocessableEntityHttpException(
+                sprintf(
+                    'L’emplacement "%s" est invalide. Valeurs autorisées : %s.',
+                    $normalizedValue,
+                    implode(
+                        ', ',
+                        array_map(
+                            static fn (
+                                EquipmentSlot $slot,
+                            ): string =>
+                            $slot->value,
+
+                            EquipmentSlot::cases(),
+                        ),
+                    ),
+                ),
+            );
+        }
+
+        return $slot->value;
+    }
+
+    private function validateMaxTier(
+        mixed $value,
+    ): int {
+        /*
+         * On exige réellement un entier.
+         *
+         * "3" n'est donc pas accepté :
+         * le frontend doit envoyer 3.
+         */
+        if (!is_int($value)) {
+            throw new UnprocessableEntityHttpException(
+                'Le palier maximal doit être un nombre entier.',
+            );
+        }
+
+        if (
+            $value < self::MIN_MAX_TIER
+            || $value > self::MAX_MAX_TIER
+        ) {
+            throw new UnprocessableEntityHttpException(
+                sprintf(
+                    'Le palier maximal doit être compris entre %d et %d.',
+                    self::MIN_MAX_TIER,
+                    self::MAX_MAX_TIER,
+                ),
+            );
+        }
+
+        return $value;
     }
 
     private function validateString(
@@ -148,7 +397,9 @@ final class AdminCardUpdateValidator
             );
         }
 
-        $normalizedValue = trim($value);
+        $normalizedValue = trim(
+            $value,
+        );
 
         if ($normalizedValue === '') {
             throw new UnprocessableEntityHttpException(
@@ -160,7 +411,9 @@ final class AdminCardUpdateValidator
         }
 
         if (
-            mb_strlen($normalizedValue)
+            mb_strlen(
+                $normalizedValue,
+            )
             > $maximumLength
         ) {
             throw new UnprocessableEntityHttpException(
@@ -180,7 +433,10 @@ final class AdminCardUpdateValidator
         string $path,
         int $depth,
     ): void {
-        if ($depth > self::MAX_JSON_DEPTH) {
+        if (
+            $depth
+            > self::MAX_JSON_DEPTH
+        ) {
             throw new UnprocessableEntityHttpException(
                 sprintf(
                     'La profondeur maximale est dépassée dans %s.',
@@ -202,7 +458,10 @@ final class AdminCardUpdateValidator
                 );
             }
 
-            foreach ($value as $key => $childValue) {
+            foreach (
+                $value
+                as $key => $childValue
+            ) {
                 if (
                     is_string($key)
                     && trim($key) === ''

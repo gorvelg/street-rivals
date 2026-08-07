@@ -429,6 +429,18 @@ export interface AdminDuelDetail {
     antiFarming: AdminJsonValue
     replayData: AdminJsonValue
 }
+export type AdminCardKind =
+    | 'ability'
+    | 'equipment'
+    | 'stat_boost'
+
+export type AdminEquipmentSlot =
+    | 'engine'
+    | 'wheels'
+    | 'brakes'
+    | 'gearbox'
+    | 'chassis'
+    | 'aero'
 export interface AdminCard {
     id: number
     code: string
@@ -436,23 +448,41 @@ export interface AdminCard {
     type: string
     rarity: string
 
-    effectConfig: Record<string, unknown>
+    kind: AdminCardKind
+
+    equipmentSlot:
+        AdminEquipmentSlot | null
+
+    maxTier: number
+
+    effectConfig: Record<
+        string,
+        unknown
+    >
 
     carCount: number
 
-    tier1Count: number
-    tier2Count: number
-    tier3Count: number
+    tierCounts: Record<
+        string,
+        number
+    >
 
     equippedCount: number
 
-    averageAcquiredLevel: number | null
+    averageAcquiredLevel:
+        number | null
 }
 
 export interface AdminCardsFilters {
     search: string | null
     type: string | null
     rarity: string | null
+
+    kind: AdminCardKind | null
+
+    equipmentSlot:
+        AdminEquipmentSlot | null
+
     tier: number | null
     equippedOnly: boolean
 }
@@ -460,6 +490,12 @@ export interface AdminCardsFilters {
 export interface AdminCardsOptions {
     types: string[]
     rarities: string[]
+
+    kinds: AdminCardKind[]
+
+    equipmentSlots:
+        AdminEquipmentSlot[]
+
     tiers: number[]
 }
 
@@ -522,6 +558,11 @@ export interface AdminCardEditableData {
     name: string
     type: string
     rarity: string
+
+    kind: AdminCardKind
+    equipmentSlot: AdminEquipmentSlot | null
+    maxTier: number
+
     effectConfig: Record<string, unknown>
 }
 

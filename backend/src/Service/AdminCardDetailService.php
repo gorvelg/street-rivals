@@ -30,70 +30,110 @@ final class AdminCardDetailService
         int $totalItems,
         int $totalPages,
     ): array {
-        $stats = $this->cardRepository
-            ->findAdminStats($card);
+        $stats = $this
+            ->cardRepository
+            ->findAdminStats(
+                $card,
+            );
 
-        $carCards = $this->carCardRepository
+        $carCards = $this
+            ->carCardRepository
             ->findAdminPageForCard(
                 card: $card,
                 search: $search,
                 tier: $tier,
-                equippedOnly: $equippedOnly,
+                equippedOnly:
+                $equippedOnly,
                 page: $page,
-                itemsPerPage: $itemsPerPage,
+                itemsPerPage:
+                $itemsPerPage,
             );
 
         return [
             'card' => [
-                'id' => $card->getId(),
-                'code' => $card->getCode(),
-                'name' => $card->getName(),
-                'type' => $card->getType(),
-                'rarity' => $card->getRarity(),
+                'id' =>
+                    $card->getId(),
+
+                'code' =>
+                    $card->getCode(),
+
+                'name' =>
+                    $card->getName(),
+
+                'type' =>
+                    $card->getType(),
+
+                'rarity' =>
+                    $card->getRarity(),
+
+                'kind' =>
+                    $card
+                        ->getKind()
+                        ->value,
+
+                'equipmentSlot' =>
+                    $card
+                        ->getEquipmentSlot()
+                        ?->value,
+
+                'maxTier' =>
+                    $card->getMaxTier(),
 
                 'effectConfig' =>
-                    $card->getEffectConfig() ?? [],
+                    $card->getEffectConfig()
+                    ?? [],
 
                 'carCount' =>
                     $stats['carCount'],
 
-                'tier1Count' =>
-                    $stats['tier1Count'],
-
-                'tier2Count' =>
-                    $stats['tier2Count'],
-
-                'tier3Count' =>
-                    $stats['tier3Count'],
+                'tierCounts' =>
+                    $stats['tierCounts'],
 
                 'equippedCount' =>
-                    $stats['equippedCount'],
+                    $stats[
+                    'equippedCount'
+                    ],
 
                 'averageAcquiredLevel' =>
-                    $stats['averageAcquiredLevel'],
+                    $stats[
+                    'averageAcquiredLevel'
+                    ],
             ],
 
             'holders' => [
                 'members' => array_map(
                     static fn (
-                        CarCard $carCard
-                    ): array => self::serializeHolder(
-                        $carCard
+                        CarCard $carCard,
+                    ): array =>
+                    self::serializeHolder(
+                        $carCard,
                     ),
-                    $carCards
+                    $carCards,
                 ),
 
                 'pagination' => [
-                    'page' => $page,
-                    'itemsPerPage' => $itemsPerPage,
-                    'totalItems' => $totalItems,
-                    'totalPages' => $totalPages,
+                    'page' =>
+                        $page,
+
+                    'itemsPerPage' =>
+                        $itemsPerPage,
+
+                    'totalItems' =>
+                        $totalItems,
+
+                    'totalPages' =>
+                        $totalPages,
                 ],
 
                 'filters' => [
-                    'search' => $search,
-                    'tier' => $tier,
-                    'equippedOnly' => $equippedOnly,
+                    'search' =>
+                        $search,
+
+                    'tier' =>
+                        $tier,
+
+                    'equippedOnly' =>
+                        $equippedOnly,
                 ],
             ],
         ];
@@ -105,38 +145,59 @@ final class AdminCardDetailService
     private static function serializeHolder(
         CarCard $carCard,
     ): array {
-        $car = $carCard->getCar();
-        $owner = $car->getUser();
+        $car =
+            $carCard->getCar();
+
+        $owner =
+            $car->getUser();
 
         return [
-            'id' => $carCard->getId(),
+            'id' =>
+                $carCard->getId(),
 
-            'tier' => $carCard->getTier(),
+            'tier' =>
+                $carCard->getTier(),
 
             'equipped' =>
                 $carCard->isEquipped(),
 
             'acquiredLevel' =>
-                $carCard->getAcquiredLevel(),
+                $carCard
+                    ->getAcquiredLevel(),
 
             'car' => [
-                'id' => $car->getId(),
-                'pilotName' => $car->getPilotName(),
-                'color' => $car->getColor(),
+                'id' =>
+                    $car->getId(),
 
-                'level' => $car->getLevel(),
-                'rating' => $car->getRating(),
+                'pilotName' =>
+                    $car->getPilotName(),
 
-                'wins' => $car->getWins(),
-                'losses' => $car->getLosses(),
+                'color' =>
+                    $car->getColor(),
+
+                'level' =>
+                    $car->getLevel(),
+
+                'rating' =>
+                    $car->getRating(),
+
+                'wins' =>
+                    $car->getWins(),
+
+                'losses' =>
+                    $car->getLosses(),
             ],
 
             'owner' => [
-                'id' => $owner?->getId(),
-                'email' => $owner?->getEmail(),
+                'id' =>
+                    $owner?->getId(),
+
+                'email' =>
+                    $owner?->getEmail(),
 
                 'isActive' =>
-                    $owner?->isActive() ?? false,
+                    $owner?->isActive()
+                    ?? false,
             ],
         ];
     }

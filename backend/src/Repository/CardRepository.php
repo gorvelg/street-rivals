@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Repository;
 
 use App\Entity\Card;
 use App\Entity\CarCard;
-use Doctrine\ORM\QueryBuilder;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 
 /**
@@ -13,9 +15,13 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class CardRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
-        parent::__construct($registry, Card::class);
+    public function __construct(
+        ManagerRegistry $registry,
+    ) {
+        parent::__construct(
+            $registry,
+            Card::class,
+        );
     }
 
     /**
@@ -25,24 +31,38 @@ class CardRepository extends ServiceEntityRepository
         ?string $search,
         ?string $type,
         ?string $rarity,
+        ?string $kind,
+        ?string $equipmentSlot,
         ?int $tier,
         bool $equippedOnly,
         int $page,
         int $itemsPerPage,
     ): array {
-        $queryBuilder = $this->createQueryBuilder('card')
-            ->orderBy('card.name', 'ASC')
-            ->addOrderBy('card.id', 'ASC')
-            ->setFirstResult(
-                ($page - 1) * $itemsPerPage
+        $queryBuilder = $this
+            ->createQueryBuilder('card')
+            ->orderBy(
+                'card.name',
+                'ASC',
             )
-            ->setMaxResults($itemsPerPage);
+            ->addOrderBy(
+                'card.id',
+                'ASC',
+            )
+            ->setFirstResult(
+                ($page - 1)
+                * $itemsPerPage,
+            )
+            ->setMaxResults(
+                $itemsPerPage,
+            );
 
         $this->applyAdminFilters(
             queryBuilder: $queryBuilder,
             search: $search,
             type: $type,
             rarity: $rarity,
+            kind: $kind,
+            equipmentSlot: $equipmentSlot,
             tier: $tier,
             equippedOnly: $equippedOnly,
         );
@@ -52,51 +72,85 @@ class CardRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
 
-        $statsByCardId = $this->findAdminStatsForCards(
-            $cards
-        );
+        $statsByCardId =
+            $this->findAdminStatsForCards(
+                $cards,
+            );
 
         return array_map(
-            static function (Card $card) use (
-                $statsByCardId
+            static function (
+                Card $card,
+            ) use (
+                $statsByCardId,
             ): array {
-                $cardId = $card->getId();
+                $cardId =
+                    $card->getId();
 
-                $stats = $cardId !== null
-                    ? ($statsByCardId[$cardId] ?? null)
-                    : null;
+                $stats =
+                    $cardId !== null
+                        ? (
+                        $statsByCardId[
+                        $cardId
+                        ]
+                        ?? null
+                    )
+                        : null;
 
                 return [
-                    'id' => $cardId,
-                    'code' => $card->getCode(),
-                    'name' => $card->getName(),
-                    'type' => $card->getType(),
-                    'rarity' => $card->getRarity(),
+                    'id' =>
+                        $cardId,
+
+                    'code' =>
+                        $card->getCode(),
+
+                    'name' =>
+                        $card->getName(),
+
+                    'type' =>
+                        $card->getType(),
+
+                    'rarity' =>
+                        $card->getRarity(),
+
+                    'kind' =>
+                        $card
+                            ->getKind()
+                            ->value,
+
+                    'equipmentSlot' =>
+                        $card
+                            ->getEquipmentSlot()
+                            ?->value,
+
+                    'maxTier' =>
+                        $card->getMaxTier(),
 
                     'effectConfig' =>
-                        $card->getEffectConfig() ?? [],
+                        $card->getEffectConfig()
+                        ?? [],
 
                     'carCount' =>
-                        $stats['carCount'] ?? 0,
+                        $stats['carCount']
+                        ?? 0,
 
-                    'tier1Count' =>
-                        $stats['tier1Count'] ?? 0,
-
-                    'tier2Count' =>
-                        $stats['tier2Count'] ?? 0,
-
-                    'tier3Count' =>
-                        $stats['tier3Count'] ?? 0,
+                    'tierCounts' =>
+                        $stats['tierCounts']
+                        ?? self::createEmptyTierCounts(
+                            $card->getMaxTier(),
+                        ),
 
                     'equippedCount' =>
-                        $stats['equippedCount'] ?? 0,
+                        $stats['equippedCount']
+                        ?? 0,
 
                     'averageAcquiredLevel' =>
-                        $stats['averageAcquiredLevel']
+                        $stats[
+                        'averageAcquiredLevel'
+                        ]
                         ?? null,
                 ];
             },
-            $cards
+            $cards,
         );
     }
 
@@ -104,17 +158,24 @@ class CardRepository extends ServiceEntityRepository
         ?string $search,
         ?string $type,
         ?string $rarity,
+        ?string $kind,
+        ?string $equipmentSlot,
         ?int $tier,
         bool $equippedOnly,
     ): int {
-        $queryBuilder = $this->createQueryBuilder('card')
-            ->select('COUNT(card.id)');
+        $queryBuilder = $this
+            ->createQueryBuilder('card')
+            ->select(
+                'COUNT(card.id)',
+            );
 
         $this->applyAdminFilters(
             queryBuilder: $queryBuilder,
             search: $search,
             type: $type,
             rarity: $rarity,
+            kind: $kind,
+            equipmentSlot: $equipmentSlot,
             tier: $tier,
             equippedOnly: $equippedOnly,
         );
@@ -130,24 +191,36 @@ class CardRepository extends ServiceEntityRepository
     public function findAdminTypes(): array
     {
         /** @var list<array{value: string|null}> $rows */
-        $rows = $this->createQueryBuilder('card')
-            ->select('DISTINCT card.type AS value')
-            ->andWhere('card.type IS NOT NULL')
-            ->andWhere("card.type <> ''")
-            ->orderBy('card.type', 'ASC')
+        $rows = $this
+            ->createQueryBuilder('card')
+            ->select(
+                'DISTINCT card.type AS value',
+            )
+            ->andWhere(
+                'card.type IS NOT NULL',
+            )
+            ->andWhere(
+                "card.type <> ''",
+            )
+            ->orderBy(
+                'card.type',
+                'ASC',
+            )
             ->getQuery()
             ->getScalarResult();
 
         return array_values(
             array_filter(
                 array_map(
-                    static fn (array $row): ?string =>
+                    static fn (
+                        array $row,
+                    ): ?string =>
                     isset($row['value'])
                         ? (string) $row['value']
                         : null,
-                    $rows
-                )
-            )
+                    $rows,
+                ),
+            ),
         );
     }
 
@@ -157,24 +230,36 @@ class CardRepository extends ServiceEntityRepository
     public function findAdminRarities(): array
     {
         /** @var list<array{value: string|null}> $rows */
-        $rows = $this->createQueryBuilder('card')
-            ->select('DISTINCT card.rarity AS value')
-            ->andWhere('card.rarity IS NOT NULL')
-            ->andWhere("card.rarity <> ''")
-            ->orderBy('card.rarity', 'ASC')
+        $rows = $this
+            ->createQueryBuilder('card')
+            ->select(
+                'DISTINCT card.rarity AS value',
+            )
+            ->andWhere(
+                'card.rarity IS NOT NULL',
+            )
+            ->andWhere(
+                "card.rarity <> ''",
+            )
+            ->orderBy(
+                'card.rarity',
+                'ASC',
+            )
             ->getQuery()
             ->getScalarResult();
 
         return array_values(
             array_filter(
                 array_map(
-                    static fn (array $row): ?string =>
+                    static fn (
+                        array $row,
+                    ): ?string =>
                     isset($row['value'])
                         ? (string) $row['value']
                         : null,
-                    $rows
-                )
-            )
+                    $rows,
+                ),
+            ),
         );
     }
 
@@ -183,69 +268,128 @@ class CardRepository extends ServiceEntityRepository
         ?string $search,
         ?string $type,
         ?string $rarity,
+        ?string $kind,
+        ?string $equipmentSlot,
         ?int $tier,
         bool $equippedOnly,
     ): void {
-        if ($search !== null && $search !== '') {
+        if (
+            $search !== null
+            && $search !== ''
+        ) {
             $queryBuilder
                 ->andWhere(
                     'LOWER(card.name) LIKE :search
-                OR LOWER(card.code) LIKE :search'
+                    OR LOWER(card.code) LIKE :search',
                 )
                 ->setParameter(
                     'search',
-                    '%' . mb_strtolower($search) . '%'
+                    '%'
+                    . mb_strtolower($search)
+                    . '%',
                 );
         }
 
-        if ($type !== null && $type !== '') {
+        if (
+            $type !== null
+            && $type !== ''
+        ) {
             $queryBuilder
-                ->andWhere('card.type = :type')
-                ->setParameter('type', $type);
+                ->andWhere(
+                    'card.type = :type',
+                )
+                ->setParameter(
+                    'type',
+                    $type,
+                );
         }
 
-        if ($rarity !== null && $rarity !== '') {
+        if (
+            $rarity !== null
+            && $rarity !== ''
+        ) {
             $queryBuilder
-                ->andWhere('card.rarity = :rarity')
-                ->setParameter('rarity', $rarity);
+                ->andWhere(
+                    'card.rarity = :rarity',
+                )
+                ->setParameter(
+                    'rarity',
+                    $rarity,
+                );
         }
 
-        if ($tier !== null || $equippedOnly) {
+        if (
+            $kind !== null
+            && $kind !== ''
+        ) {
+            $queryBuilder
+                ->andWhere(
+                    'card.kind = :kind',
+                )
+                ->setParameter(
+                    'kind',
+                    $kind,
+                );
+        }
+
+        if (
+            $equipmentSlot !== null
+            && $equipmentSlot !== ''
+        ) {
+            $queryBuilder
+                ->andWhere(
+                    'card.equipmentSlot = :equipmentSlot',
+                )
+                ->setParameter(
+                    'equipmentSlot',
+                    $equipmentSlot,
+                );
+        }
+
+        if (
+            $tier !== null
+            || $equippedOnly
+        ) {
             $subQuery = $this
                 ->getEntityManager()
                 ->createQueryBuilder()
                 ->select('1')
                 ->from(
                     CarCard::class,
-                    'filterCarCard'
+                    'filterCarCard',
                 )
                 ->andWhere(
-                    'filterCarCard.card = card'
+                    'filterCarCard.card = card',
                 );
 
             if ($tier !== null) {
                 $subQuery
                     ->andWhere(
-                        'filterCarCard.tier = :adminTier'
+                        'filterCarCard.tier = :adminTier',
                     );
 
-                $queryBuilder->setParameter(
-                    'adminTier',
-                    $tier
-                );
+                $queryBuilder
+                    ->setParameter(
+                        'adminTier',
+                        $tier,
+                    );
             }
 
             if ($equippedOnly) {
-                $subQuery->andWhere(
-                    'filterCarCard.isEquipped = true'
-                );
+                $subQuery
+                    ->andWhere(
+                        'filterCarCard.isEquipped = true',
+                    );
             }
 
-            $queryBuilder->andWhere(
-                $queryBuilder
-                    ->expr()
-                    ->exists($subQuery->getDQL())
-            );
+            $queryBuilder
+                ->andWhere(
+                    $queryBuilder
+                        ->expr()
+                        ->exists(
+                            $subQuery->getDQL(),
+                        ),
+                );
         }
     }
 
@@ -254,9 +398,7 @@ class CardRepository extends ServiceEntityRepository
      *
      * @return array<int, array{
      *     carCount: int,
-     *     tier1Count: int,
-     *     tier2Count: int,
-     *     tier3Count: int,
+     *     tierCounts: array<int, int>,
      *     equippedCount: int,
      *     averageAcquiredLevel: float|null
      * }>
@@ -268,103 +410,207 @@ class CardRepository extends ServiceEntityRepository
             return [];
         }
 
-        /** @var list<array<string, mixed>> $rows */
-        $rows = $this
+        /*
+         * On initialise toutes les cartes.
+         *
+         * Cela garantit que même une carte
+         * jamais obtenue possède :
+         *
+         * tierCounts = {
+         *   1: 0,
+         *   2: 0,
+         *   ...
+         * }
+         */
+        $stats = [];
+
+        foreach ($cards as $card) {
+            $cardId = $card->getId();
+
+            if ($cardId === null) {
+                continue;
+            }
+
+            $stats[$cardId] = [
+                'carCount' => 0,
+
+                'tierCounts' =>
+                    self::createEmptyTierCounts(
+                        $card->getMaxTier(),
+                    ),
+
+                'equippedCount' => 0,
+
+                'averageAcquiredLevel' =>
+                    null,
+            ];
+        }
+
+        /*
+         * Statistiques générales.
+         */
+        /** @var list<array<string, mixed>> $summaryRows */
+        $summaryRows = $this
             ->getEntityManager()
             ->createQueryBuilder()
             ->select(
-                'IDENTITY(carCard.card) AS cardId'
+                'IDENTITY(carCard.card) AS cardId',
             )
             ->addSelect(
-                'COUNT(DISTINCT car.id) AS carCount'
-            )
-            ->addSelect(
-                'SUM(
-                CASE
-                    WHEN carCard.tier = 1
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS tier1Count'
+                'COUNT(DISTINCT car.id) AS carCount',
             )
             ->addSelect(
                 'SUM(
-                CASE
-                    WHEN carCard.tier = 2
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS tier2Count'
-            )
-            ->addSelect(
-                'SUM(
-                CASE
-                    WHEN carCard.tier = 3
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS tier3Count'
-            )
-            ->addSelect(
-                'SUM(
-                CASE
-                    WHEN carCard.isEquipped = true
-                    THEN 1
-                    ELSE 0
-                END
-            ) AS equippedCount'
+                    CASE
+                        WHEN carCard.isEquipped = true
+                        THEN 1
+                        ELSE 0
+                    END
+                ) AS equippedCount',
             )
             ->addSelect(
                 'AVG(
-                carCard.acquiredLevel
-            ) AS averageAcquiredLevel'
+                    carCard.acquiredLevel
+                ) AS averageAcquiredLevel',
             )
-            ->from(CarCard::class, 'carCard')
-            ->innerJoin('carCard.car', 'car')
-            ->andWhere('carCard.card IN (:cards)')
-            ->setParameter('cards', $cards)
-            ->groupBy('carCard.card')
+            ->from(
+                CarCard::class,
+                'carCard',
+            )
+            ->innerJoin(
+                'carCard.car',
+                'car',
+            )
+            ->andWhere(
+                'carCard.card IN (:cards)',
+            )
+            ->setParameter(
+                'cards',
+                $cards,
+            )
+            ->groupBy(
+                'carCard.card',
+            )
             ->getQuery()
             ->getScalarResult();
 
-        $stats = [];
+        foreach ($summaryRows as $row) {
+            $cardId =
+                (int) $row['cardId'];
 
-        foreach ($rows as $row) {
-            $cardId = (int) $row['cardId'];
+            if (
+                !array_key_exists(
+                    $cardId,
+                    $stats,
+                )
+            ) {
+                continue;
+            }
 
             $averageAcquiredLevel =
                 array_key_exists(
                     'averageAcquiredLevel',
-                    $row
+                    $row,
                 )
-                && $row['averageAcquiredLevel'] !== null
+                && $row[
+                'averageAcquiredLevel'
+                ] !== null
                     ? round(
                     (float) $row[
                     'averageAcquiredLevel'
                     ],
-                    2
+                    2,
                 )
                     : null;
 
-            $stats[$cardId] = [
-                'carCount' =>
-                    (int) $row['carCount'],
+            $stats[$cardId]['carCount'] =
+                (int) $row['carCount'];
 
-                'tier1Count' =>
-                    (int) $row['tier1Count'],
+            $stats[$cardId]['equippedCount'] =
+                (int) $row['equippedCount'];
 
-                'tier2Count' =>
-                    (int) $row['tier2Count'],
+            $stats[$cardId][
+            'averageAcquiredLevel'
+            ] = $averageAcquiredLevel;
+        }
 
-                'tier3Count' =>
-                    (int) $row['tier3Count'],
+        /*
+         * Comptage dynamique par palier.
+         *
+         * Plus aucun CASE tier=1/2/3.
+         */
+        /** @var list<array<string, mixed>> $tierRows */
+        $tierRows = $this
+            ->getEntityManager()
+            ->createQueryBuilder()
+            ->select(
+                'IDENTITY(carCard.card) AS cardId',
+            )
+            ->addSelect(
+                'carCard.tier AS tier',
+            )
+            ->addSelect(
+                'COUNT(carCard.id) AS tierCount',
+            )
+            ->from(
+                CarCard::class,
+                'carCard',
+            )
+            ->andWhere(
+                'carCard.card IN (:cards)',
+            )
+            ->setParameter(
+                'cards',
+                $cards,
+            )
+            ->groupBy(
+                'carCard.card',
+            )
+            ->addGroupBy(
+                'carCard.tier',
+            )
+            ->getQuery()
+            ->getScalarResult();
 
-                'equippedCount' =>
-                    (int) $row['equippedCount'],
+        foreach ($tierRows as $row) {
+            $cardId =
+                (int) $row['cardId'];
 
-                'averageAcquiredLevel' =>
-                    $averageAcquiredLevel,
-            ];
+            $tier =
+                (int) $row['tier'];
+
+            if (
+                !array_key_exists(
+                    $cardId,
+                    $stats,
+                )
+            ) {
+                continue;
+            }
+
+            if (
+                !array_key_exists(
+                    $tier,
+                    $stats[$cardId][
+                    'tierCounts'
+                    ],
+                )
+            ) {
+                /*
+                 * Donnée incohérente éventuelle :
+                 * par exemple une CarCard T5 alors
+                 * que la carte est maxTier 3.
+                 *
+                 * On ne l'expose pas dans les
+                 * statistiques normales.
+                 */
+                continue;
+            }
+
+            $stats[$cardId][
+            'tierCounts'
+            ][$tier] =
+                (int) $row['tierCount'];
         }
 
         return $stats;
@@ -373,9 +619,7 @@ class CardRepository extends ServiceEntityRepository
     /**
      * @return array{
      *     carCount: int,
-     *     tier1Count: int,
-     *     tier2Count: int,
-     *     tier3Count: int,
+     *     tierCounts: array<int, int>,
      *     equippedCount: int,
      *     averageAcquiredLevel: float|null
      * }
@@ -385,26 +629,51 @@ class CardRepository extends ServiceEntityRepository
     ): array {
         $defaultStats = [
             'carCount' => 0,
-            'tier1Count' => 0,
-            'tier2Count' => 0,
-            'tier3Count' => 0,
+
+            'tierCounts' =>
+                self::createEmptyTierCounts(
+                    $card->getMaxTier(),
+                ),
+
             'equippedCount' => 0,
-            'averageAcquiredLevel' => null,
+
+            'averageAcquiredLevel' =>
+                null,
         ];
 
-        $cardId = $card->getId();
+        $cardId =
+            $card->getId();
 
         if ($cardId === null) {
             return $defaultStats;
         }
 
-        $statsByCardId = $this->findAdminStatsForCards([
-            $card,
-        ]);
+        $statsByCardId =
+            $this->findAdminStatsForCards([
+                $card,
+            ]);
 
-        return $statsByCardId[$cardId]
-            ?? $defaultStats;
+        return $statsByCardId[
+        $cardId
+        ] ?? $defaultStats;
     }
 
+    /**
+     * @return array<int, int>
+     */
+    private static function createEmptyTierCounts(
+        int $maxTier,
+    ): array {
+        $tierCounts = [];
 
+        for (
+            $tier = 1;
+            $tier <= $maxTier;
+            ++$tier
+        ) {
+            $tierCounts[$tier] = 0;
+        }
+
+        return $tierCounts;
+    }
 }

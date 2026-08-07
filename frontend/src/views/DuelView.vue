@@ -682,7 +682,11 @@ onBeforeUnmount(() => {
                   duelStore.duel.replayData.antiFarming
                       ?.pairDuelNumber ?? 1
                 }}
-                / 3
+                /
+                {{
+                  duelStore.duel.replayData.antiFarming
+                      ?.pairDailyLimit ?? 3
+                }}
               </strong>
             </div>
           </div>

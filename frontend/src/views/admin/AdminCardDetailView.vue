@@ -59,6 +59,49 @@ function formatJson(
   }
 }
 
+function kindLabel(
+    kind: string,
+): string {
+  switch (kind) {
+    case 'equipment':
+      return 'Équipement'
+
+    case 'stat_boost':
+      return 'Bonus permanent'
+
+    case 'ability':
+    default:
+      return 'Capacité'
+  }
+}
+
+function equipmentSlotLabel(
+    slot: string | null,
+): string {
+  switch (slot) {
+    case 'engine':
+      return 'Moteur'
+
+    case 'wheels':
+      return 'Roues'
+
+    case 'brakes':
+      return 'Freins'
+
+    case 'gearbox':
+      return 'Boîte de vitesses'
+
+    case 'chassis':
+      return 'Châssis'
+
+    case 'aero':
+      return 'Aérodynamique'
+
+    default:
+      return '—'
+  }
+}
+
 watch(
     cardId,
     async (
@@ -152,9 +195,34 @@ onUnmounted((): void => {
     >
       <section class="card-summary">
         <div>
-          <span class="card-type">
-            {{ cardStore.detail.card.type }}
-          </span>
+          <div class="card-labels">
+  <span class="card-type">
+    {{ cardStore.detail.card.type }}
+  </span>
+
+            <span class="kind-badge">
+    {{
+                kindLabel(
+                    cardStore.detail.card.kind,
+                )
+              }}
+  </span>
+
+            <span
+                v-if="
+        cardStore.detail.card.kind
+        === 'equipment'
+      "
+                class="slot-badge"
+            >
+    {{
+                equipmentSlotLabel(
+                    cardStore.detail.card
+                        .equipmentSlot,
+                )
+              }}
+  </span>
+          </div>
 
           <h2>
             {{ cardStore.detail.card.name }}
@@ -190,36 +258,37 @@ onUnmounted((): void => {
           </strong>
         </article>
 
-        <article>
-          <span>Palier 1</span>
+        <article
+            v-for="
+      availableTier in
+        cardStore.detail.card.maxTier
+    "
+            :key="
+      `tier-${availableTier}`
+    "
+        >
+  <span>
+    Palier {{ availableTier }}
+  </span>
 
           <strong>
             {{
               cardStore.detail.card
-                  .tier1Count
+                  .tierCounts[
+                  String(
+                      availableTier,
+                  )
+                  ]
+              ?? 0
             }}
           </strong>
         </article>
 
         <article>
-          <span>Palier 2</span>
+          <span>Palier maximal</span>
 
           <strong>
-            {{
-              cardStore.detail.card
-                  .tier2Count
-            }}
-          </strong>
-        </article>
-
-        <article>
-          <span>Palier 3</span>
-
-          <strong>
-            {{
-              cardStore.detail.card
-                  .tier3Count
-            }}
+            {{ cardStore.detail.card.maxTier }}
           </strong>
         </article>
 
@@ -354,6 +423,109 @@ onUnmounted((): void => {
             </label>
           </div>
 
+          <label class="edit-field">
+            <span>Nature</span>
+
+            <select
+                v-model="cardStore.editKind"
+                :disabled="cardStore.isSaving"
+                @change="cardStore.changeKind"
+            >
+              <option value="ability">
+                Capacité
+              </option>
+
+              <option value="equipment">
+                Équipement
+              </option>
+
+              <option value="stat_boost">
+                Bonus permanent
+              </option>
+            </select>
+
+            <small>
+              Définit le comportement général
+              de la carte.
+            </small>
+          </label>
+
+          <label
+              v-if="
+      cardStore.editKind
+      === 'equipment'
+    "
+              class="edit-field"
+          >
+            <span>Emplacement</span>
+
+            <select
+                v-model="
+        cardStore.editEquipmentSlot
+      "
+                required
+                :disabled="cardStore.isSaving"
+                @change="
+        cardStore.clearEditMessages
+      "
+            >
+              <option value="">
+                Sélectionner…
+              </option>
+
+              <option value="engine">
+                Moteur
+              </option>
+
+              <option value="wheels">
+                Roues
+              </option>
+
+              <option value="brakes">
+                Freins
+              </option>
+
+              <option value="gearbox">
+                Boîte de vitesses
+              </option>
+
+              <option value="chassis">
+                Châssis
+              </option>
+
+              <option value="aero">
+                Aérodynamique
+              </option>
+            </select>
+
+            <small>
+              Une voiture ne peut équiper
+              qu'un objet par emplacement.
+            </small>
+          </label>
+
+          <label class="edit-field">
+            <span>Palier maximal</span>
+
+            <input
+                v-model.number="
+        cardStore.editMaxTier
+      "
+                type="number"
+                min="1"
+                max="10"
+                step="1"
+                :disabled="cardStore.isSaving"
+                @input="
+        cardStore.clearEditMessages
+      "
+            >
+
+            <small>
+              Valeur comprise entre 1 et 10.
+            </small>
+          </label>
+
           <label class="edit-field effect-config-field">
             <span>Configuration des effets</span>
 
@@ -367,9 +539,18 @@ onUnmounted((): void => {
                 @input="cardStore.clearEditMessages"
             />
 
-            <small>
-              Le contenu doit être un objet JSON
-              valide.
+            <small
+                v-if="
+      cardStore.editKind === 'ability'
+    "
+            >
+              Configuration historique de la capacité.
+            </small>
+
+            <small v-else>
+              Les équipements et bonus permanents
+              utilisent une propriété "tiers" contenant
+              les bonus ou malus de statistiques.
             </small>
           </label>
 
@@ -454,16 +635,15 @@ onUnmounted((): void => {
                 Tous
               </option>
 
-              <option value="1">
-                Palier 1
-              </option>
-
-              <option value="2">
-                Palier 2
-              </option>
-
-              <option value="3">
-                Palier 3
+              <option
+                  v-for="
+        availableTier in
+          cardStore.detail.card.maxTier
+      "
+                  :key="availableTier"
+                  :value="String(availableTier)"
+              >
+                Palier {{ availableTier }}
               </option>
             </select>
           </label>
@@ -1054,6 +1234,7 @@ td a:hover {
 }
 
 .edit-field input,
+.edit-field select,
 .edit-field textarea {
   width: 100%;
   padding: 11px 12px;
@@ -1065,7 +1246,8 @@ td a:hover {
   box-sizing: border-box;
 }
 
-.edit-field input {
+.edit-field input,
+.edit-field select {
   min-height: 42px;
 }
 
@@ -1168,5 +1350,29 @@ td a:hover {
   border-color: rgba(40, 120, 210, 0.5)
   !important;
   background: rgba(40, 120, 210, 0.16);
+}
+.card-labels {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 6px;
+}
+
+.kind-badge,
+.slot-badge {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.kind-badge {
+  background: rgba(40, 120, 210, 0.14);
+}
+
+.slot-badge {
+  background: rgba(180, 120, 40, 0.14);
 }
 </style>

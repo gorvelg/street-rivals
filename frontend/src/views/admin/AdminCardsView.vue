@@ -3,11 +3,18 @@ import {
   onMounted,
   onUnmounted,
 } from 'vue'
-import AdminNavigation from '../../components/admin/AdminNavigation.vue'
-import { useAdminCardsStore } from '../../stores/adminCards'
 import { RouterLink } from 'vue-router'
+import AdminNavigation
+  from '../../components/admin/AdminNavigation.vue'
+import { useAdminCardsStore }
+  from '../../stores/adminCards'
+import type {
+  AdminCardKind,
+  AdminEquipmentSlot,
+} from '../../types/admin'
 
-const cardsStore = useAdminCardsStore()
+const cardsStore =
+    useAdminCardsStore()
 
 function formatAverageLevel(
     value: number | null,
@@ -16,24 +23,73 @@ function formatAverageLevel(
     return '—'
   }
 
-  return new Intl.NumberFormat('fr-FR', {
-    maximumFractionDigits: 2,
-  }).format(value)
+  return new Intl.NumberFormat(
+      'fr-FR',
+      {
+        maximumFractionDigits: 2,
+      },
+  ).format(value)
 }
 
 function formatEffectConfig(
     value: Record<string, unknown>,
 ): string {
   try {
-    return JSON.stringify(value, null, 2)
+    return JSON.stringify(
+        value,
+        null,
+        2,
+    )
   } catch {
     return 'Configuration indisponible'
   }
 }
 
-onMounted(async (): Promise<void> => {
-  await cardsStore.loadCards()
-})
+function kindLabel(
+    kind: AdminCardKind,
+): string {
+  switch (kind) {
+    case 'equipment':
+      return 'Équipement'
+
+    case 'stat_boost':
+      return 'Bonus permanent'
+
+    case 'ability':
+    default:
+      return 'Capacité'
+  }
+}
+
+function equipmentSlotLabel(
+    slot: AdminEquipmentSlot,
+): string {
+  switch (slot) {
+    case 'engine':
+      return 'Moteur'
+
+    case 'wheels':
+      return 'Roues'
+
+    case 'brakes':
+      return 'Freins'
+
+    case 'gearbox':
+      return 'Boîte de vitesses'
+
+    case 'chassis':
+      return 'Châssis'
+
+    case 'aero':
+      return 'Aérodynamique'
+  }
+}
+
+onMounted(
+    async (): Promise<void> => {
+      await cardsStore.loadCards()
+    },
+)
 
 onUnmounted((): void => {
   cardsStore.reset()
@@ -51,7 +107,8 @@ onUnmounted((): void => {
         <h1>Cartes</h1>
 
         <p class="admin-description">
-          Catalogue, paliers et utilisation des cartes.
+          Catalogue, catégories, équipements,
+          paliers et utilisation des cartes.
         </p>
       </div>
 
@@ -60,10 +117,10 @@ onUnmounted((): void => {
           class="refresh-button"
           :disabled="cardsStore.isLoading"
           @click="
-          cardsStore.loadCards(
-            cardsStore.pagination.page,
-          )
-        "
+            cardsStore.loadCards(
+                cardsStore.pagination.page,
+            )
+          "
       >
         {{
           cardsStore.isLoading
@@ -77,9 +134,13 @@ onUnmounted((): void => {
 
     <form
         class="filters"
-        @submit.prevent="cardsStore.submitFilters"
+        @submit.prevent="
+          cardsStore.submitFilters
+        "
     >
-      <label class="filter-field search-field">
+      <label
+          class="filter-field search-field"
+      >
         <span>Nom ou code</span>
 
         <input
@@ -91,18 +152,82 @@ onUnmounted((): void => {
       </label>
 
       <label class="filter-field">
-        <span>Type</span>
+        <span>Nature</span>
 
-        <select v-model="cardsStore.type">
+        <select
+            v-model="cardsStore.kind"
+            @change="cardsStore.changeKind"
+        >
+          <option value="">
+            Toutes
+          </option>
+
+          <option
+              v-for="
+                availableKind in
+                  cardsStore.options.kinds
+              "
+              :key="availableKind"
+              :value="availableKind"
+          >
+            {{
+              kindLabel(
+                  availableKind,
+              )
+            }}
+          </option>
+        </select>
+      </label>
+
+      <label class="filter-field">
+        <span>Emplacement</span>
+
+        <select
+            v-model="
+              cardsStore.equipmentSlot
+            "
+            :disabled="
+              cardsStore.kind
+              !== 'equipment'
+            "
+        >
           <option value="">
             Tous
           </option>
 
           <option
               v-for="
-              availableType in
-                cardsStore.options.types
-            "
+                availableSlot in
+                  cardsStore.options
+                      .equipmentSlots
+              "
+              :key="availableSlot"
+              :value="availableSlot"
+          >
+            {{
+              equipmentSlotLabel(
+                  availableSlot,
+              )
+            }}
+          </option>
+        </select>
+      </label>
+
+      <label class="filter-field">
+        <span>Type</span>
+
+        <select
+            v-model="cardsStore.type"
+        >
+          <option value="">
+            Tous
+          </option>
+
+          <option
+              v-for="
+                availableType in
+                  cardsStore.options.types
+              "
               :key="availableType"
               :value="availableType"
           >
@@ -114,16 +239,19 @@ onUnmounted((): void => {
       <label class="filter-field">
         <span>Rareté</span>
 
-        <select v-model="cardsStore.rarity">
+        <select
+            v-model="cardsStore.rarity"
+        >
           <option value="">
             Toutes
           </option>
 
           <option
               v-for="
-              availableRarity in
-                cardsStore.options.rarities
-            "
+                availableRarity in
+                  cardsStore.options
+                      .rarities
+              "
               :key="availableRarity"
               :value="availableRarity"
           >
@@ -135,28 +263,35 @@ onUnmounted((): void => {
       <label class="filter-field">
         <span>Palier possédé</span>
 
-        <select v-model="cardsStore.tier">
+        <select
+            v-model="cardsStore.tier"
+        >
           <option value="">
             Tous
           </option>
 
-          <option value="1">
-            Palier 1
-          </option>
-
-          <option value="2">
-            Palier 2
-          </option>
-
-          <option value="3">
-            Palier 3
+          <option
+              v-for="
+                availableTier in
+                  cardsStore.options.tiers
+              "
+              :key="availableTier"
+              :value="
+                String(
+                    availableTier,
+                )
+              "
+          >
+            Palier {{ availableTier }}
           </option>
         </select>
       </label>
 
       <label class="checkbox-field">
         <input
-            v-model="cardsStore.equippedOnly"
+            v-model="
+              cardsStore.equippedOnly
+            "
             type="checkbox"
         >
 
@@ -177,14 +312,19 @@ onUnmounted((): void => {
           type="button"
           class="secondary-button"
           :disabled="cardsStore.isLoading"
-          @click="cardsStore.clearFilters"
+          @click="
+            cardsStore.clearFilters
+          "
       >
         Effacer
       </button>
     </form>
 
     <div
-        v-if="cardsStore.errorMessage !== null"
+        v-if="
+          cardsStore.errorMessage
+          !== null
+        "
         class="alert alert-error"
     >
       <strong>Erreur</strong>
@@ -195,7 +335,9 @@ onUnmounted((): void => {
 
       <button
           type="button"
-          @click="cardsStore.loadCards(1)"
+          @click="
+            cardsStore.loadCards(1)
+          "
       >
         Réessayer
       </button>
@@ -203,9 +345,10 @@ onUnmounted((): void => {
 
     <div
         v-else-if="
-        cardsStore.isLoading
-        && cardsStore.cards.length === 0
-      "
+          cardsStore.isLoading
+          && cardsStore.cards.length
+              === 0
+        "
         class="loading-panel"
     >
       Chargement des cartes…
@@ -215,7 +358,10 @@ onUnmounted((): void => {
       <div class="section-summary">
         <p>
           <strong>
-            {{ cardsStore.pagination.totalItems }}
+            {{
+              cardsStore.pagination
+                  .totalItems
+            }}
           </strong>
           carte(s)
         </p>
@@ -224,37 +370,76 @@ onUnmounted((): void => {
           Page
           {{ cardsStore.pagination.page }}
           sur
-          {{ cardsStore.pagination.totalPages }}
+          {{
+            cardsStore.pagination
+                .totalPages
+          }}
         </p>
       </div>
 
       <div
-          v-if="cardsStore.cards.length === 0"
+          v-if="
+            cardsStore.cards.length
+            === 0
+          "
           class="empty-panel"
       >
         Aucune carte ne correspond aux filtres.
       </div>
 
-      <div v-else class="cards-grid">
+      <div
+          v-else
+          class="cards-grid"
+      >
         <article
-            v-for="card in cardsStore.cards"
+            v-for="
+              card in cardsStore.cards
+            "
             :key="card.id"
             class="card-panel"
         >
           <header class="card-header">
             <div>
-              <span class="card-type">
-                {{ card.type }}
-              </span>
+              <div class="card-labels">
+                <span class="card-type">
+                  {{ card.type }}
+                </span>
+
+                <span class="kind-badge">
+                  {{
+                    kindLabel(
+                        card.kind,
+                    )
+                  }}
+                </span>
+
+                <span
+                    v-if="
+                      card.kind
+                        === 'equipment'
+                      && card.equipmentSlot
+                        !== null
+                    "
+                    class="slot-badge"
+                >
+                  {{
+                    equipmentSlotLabel(
+                        card.equipmentSlot,
+                    )
+                  }}
+                </span>
+              </div>
 
               <h2>
                 <RouterLink
                     :to="{
-      name: 'admin-card-detail',
-      params: {
-        id: card.id,
-      },
-    }"
+                      name:
+                        'admin-card-detail',
+
+                      params: {
+                        id: card.id,
+                      },
+                    }"
                     class="card-detail-link"
                 >
                   {{ card.name }}
@@ -289,6 +474,14 @@ onUnmounted((): void => {
             </div>
 
             <div>
+              <span>Palier max.</span>
+
+              <strong>
+                {{ card.maxTier }}
+              </strong>
+            </div>
+
+            <div>
               <span>Niveau moyen</span>
 
               <strong>
@@ -302,30 +495,29 @@ onUnmounted((): void => {
           </div>
 
           <div class="tiers-grid">
-            <div>
-              <span>Palier 1</span>
+            <div
+                v-for="
+        availableTier in card.maxTier
+      "
+                :key="availableTier"
+            >
+    <span>
+      Palier {{ availableTier }}
+    </span>
 
               <strong>
-                {{ card.tier1Count }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Palier 2</span>
-
-              <strong>
-                {{ card.tier2Count }}
-              </strong>
-            </div>
-
-            <div>
-              <span>Palier 3</span>
-
-              <strong>
-                {{ card.tier3Count }}
+                {{
+                  card.tierCounts[
+                      String(
+                          availableTier,
+                      )
+                      ] ?? 0
+                }}
               </strong>
             </div>
           </div>
+
+
 
           <details class="effect-details">
             <summary>
@@ -345,28 +537,40 @@ onUnmounted((): void => {
         <button
             type="button"
             :disabled="
-            cardsStore.isLoading
-            || cardsStore.pagination.page <= 1
-          "
-            @click="cardsStore.previousPage"
+              cardsStore.isLoading
+              || cardsStore.pagination
+                  .page <= 1
+            "
+            @click="
+              cardsStore.previousPage
+            "
         >
           Page précédente
         </button>
 
         <span>
-          {{ cardsStore.pagination.page }}
+          {{
+            cardsStore.pagination.page
+          }}
           /
-          {{ cardsStore.pagination.totalPages }}
+          {{
+            cardsStore.pagination
+                .totalPages
+          }}
         </span>
 
         <button
             type="button"
             :disabled="
-            cardsStore.isLoading
-            || cardsStore.pagination.page
-              >= cardsStore.pagination.totalPages
-          "
-            @click="cardsStore.nextPage"
+              cardsStore.isLoading
+              || cardsStore.pagination
+                  .page
+                >= cardsStore.pagination
+                    .totalPages
+            "
+            @click="
+              cardsStore.nextPage
+            "
         >
           Page suivante
         </button>
@@ -377,7 +581,10 @@ onUnmounted((): void => {
 
 <style scoped>
 .admin-cards {
-  width: min(1280px, calc(100% - 32px));
+  width: min(
+      1280px,
+      calc(100% - 32px)
+  );
   margin: 0 auto;
   padding: 32px 0 64px;
 }
@@ -401,7 +608,11 @@ onUnmounted((): void => {
 
 .admin-header h1 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 3rem);
+  font-size: clamp(
+      2rem,
+      5vw,
+      3rem
+  );
 }
 
 .admin-description {
@@ -416,9 +627,11 @@ onUnmounted((): void => {
 .alert button {
   min-height: 42px;
   padding: 0 15px;
-  border: 1px solid rgba(127, 127, 127, 0.35);
+  border: 1px solid
+  rgba(127, 127, 127, 0.35);
   border-radius: 9px;
-  background: rgba(127, 127, 127, 0.1);
+  background:
+      rgba(127, 127, 127, 0.1);
   color: inherit;
   font: inherit;
   font-weight: 700;
@@ -433,17 +646,23 @@ button:disabled {
 .filters {
   display: grid;
   grid-template-columns:
-    minmax(230px, 1fr)
-    minmax(130px, 170px)
-    minmax(130px, 170px)
-    minmax(130px, 160px);
+    repeat(
+      auto-fit,
+      minmax(150px, 1fr)
+    );
   align-items: end;
   gap: 11px;
   margin-bottom: 24px;
   padding: 18px;
-  border: 1px solid rgba(127, 127, 127, 0.22);
+  border: 1px solid
+  rgba(127, 127, 127, 0.22);
   border-radius: 14px;
-  background: rgba(127, 127, 127, 0.06);
+  background:
+      rgba(127, 127, 127, 0.06);
+}
+
+.search-field {
+  min-width: 230px;
 }
 
 .filter-field {
@@ -462,11 +681,17 @@ button:disabled {
   width: 100%;
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid rgba(127, 127, 127, 0.35);
+  border: 1px solid
+  rgba(127, 127, 127, 0.35);
   border-radius: 9px;
   background: transparent;
   color: inherit;
   font: inherit;
+}
+
+.filter-field select:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .checkbox-field {
@@ -498,16 +723,21 @@ button:disabled {
 .cards-grid {
   display: grid;
   grid-template-columns:
-    repeat(auto-fit, minmax(310px, 1fr));
+    repeat(
+      auto-fit,
+      minmax(310px, 1fr)
+    );
   gap: 15px;
 }
 
 .card-panel {
   min-width: 0;
   padding: 19px;
-  border: 1px solid rgba(127, 127, 127, 0.22);
+  border: 1px solid
+  rgba(127, 127, 127, 0.22);
   border-radius: 14px;
-  background: rgba(127, 127, 127, 0.05);
+  background:
+      rgba(127, 127, 127, 0.05);
 }
 
 .card-header {
@@ -526,6 +756,13 @@ button:disabled {
   opacity: 0.6;
 }
 
+.card-labels {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .card-type {
   font-size: 0.73rem;
   font-weight: 750;
@@ -534,12 +771,29 @@ button:disabled {
   opacity: 0.62;
 }
 
+.kind-badge,
+.slot-badge,
 .rarity-badge {
+  display: inline-flex;
   padding: 5px 9px;
   border-radius: 999px;
-  background: rgba(127, 127, 127, 0.14);
   font-size: 0.75rem;
   font-weight: 750;
+}
+
+.kind-badge {
+  background:
+      rgba(40, 120, 210, 0.14);
+}
+
+.slot-badge {
+  background:
+      rgba(180, 120, 40, 0.14);
+}
+
+.rarity-badge {
+  background:
+      rgba(127, 127, 127, 0.14);
 }
 
 .usage-summary,
@@ -550,18 +804,24 @@ button:disabled {
 }
 
 .usage-summary {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns:
+    repeat(4, 1fr);
 }
 
 .tiers-grid {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(80px, 1fr)
+    );
 }
 
 .usage-summary div,
 .tiers-grid div {
   padding: 10px;
   border-radius: 9px;
-  background: rgba(127, 127, 127, 0.08);
+  background:
+      rgba(127, 127, 127, 0.08);
 }
 
 .usage-summary span,
@@ -577,6 +837,7 @@ button:disabled {
   margin-top: 4px;
   font-size: 1.1rem;
 }
+
 
 .effect-details {
   margin-top: 17px;
@@ -594,7 +855,8 @@ button:disabled {
   margin-bottom: 0;
   padding: 13px;
   border-radius: 8px;
-  background: rgba(18, 18, 18, 0.92);
+  background:
+      rgba(18, 18, 18, 0.92);
   color: white;
   font-size: 0.74rem;
   line-height: 1.5;
@@ -615,32 +877,44 @@ button:disabled {
 .alert {
   padding: 36px;
   border-radius: 14px;
-  background: rgba(127, 127, 127, 0.08);
+  background:
+      rgba(127, 127, 127, 0.08);
   text-align: center;
 }
 
 .alert-error {
-  border: 1px solid rgba(190, 50, 50, 0.5);
-  background: rgba(190, 50, 50, 0.1);
+  border: 1px solid
+  rgba(190, 50, 50, 0.5);
+  background:
+      rgba(190, 50, 50, 0.1);
 }
 
 .alert p {
   margin: 8px 0 14px;
 }
 
-@media (max-width: 900px) {
-  .filters {
-    grid-template-columns: 1fr 1fr;
-  }
+.card-detail-link {
+  color: inherit;
+  text-decoration: none;
+}
 
-  .search-field {
-    grid-column: 1 / -1;
+.card-detail-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 850px) {
+  .usage-summary {
+    grid-template-columns:
+      repeat(2, 1fr);
   }
 }
 
 @media (max-width: 600px) {
   .admin-cards {
-    width: min(100% - 20px, 1280px);
+    width: min(
+        100% - 20px,
+        1280px
+    );
     padding-top: 20px;
   }
 
@@ -659,20 +933,12 @@ button:disabled {
   }
 
   .search-field {
-    grid-column: auto;
+    min-width: 0;
   }
 
   .usage-summary,
   .tiers-grid {
     grid-template-columns: 1fr;
   }
-}
-.card-detail-link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.card-detail-link:hover {
-  text-decoration: underline;
 }
 </style>
