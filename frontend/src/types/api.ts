@@ -840,3 +840,86 @@ export interface EquipCarCardResponse {
 
     stats: CarStats
 }
+/*
+ * =====================================
+ * CLASSEMENT
+ * =====================================
+ */
+
+export interface RankingEntry {
+    rank: number
+    carId: number
+    pilotName: string
+    level: number
+    rating: number
+    wins: number
+    losses: number
+    color: string
+    bodyStyle: CarBodyStyle
+    wheelStyle: CarWheelStyle
+}
+
+export interface RankingResponse {
+    items: RankingEntry[]
+    current:
+        RankingEntry
+        | null
+}
+
+/*
+ * =====================================
+ * HISTORIQUE DUELS
+ * =====================================
+ */
+
+export interface DuelHistoryOpponent {
+    carId:
+        number
+        | null
+
+    pilotName: string
+    level: number
+
+    color: string
+
+    bodyStyle:
+        CarBodyStyle
+
+    wheelStyle:
+        CarWheelStyle
+}
+
+export interface DuelHistoryItem {
+    duelId: number
+
+    result:
+        'victory'
+        | 'defeat'
+
+    won: boolean
+
+    side:
+        'attacker'
+        | 'defender'
+
+    opponent:
+        DuelHistoryOpponent
+
+    xpReward: number
+    moneyReward: number
+
+    ratingBefore: number
+    ratingAfter: number
+    ratingDelta: number
+
+    finalGap: number
+
+    engineVersion: string
+
+    createdAt: string
+}
+
+export interface DuelHistoryResponse {
+    items:
+        DuelHistoryItem[]
+}

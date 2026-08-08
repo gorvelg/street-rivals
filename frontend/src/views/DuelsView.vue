@@ -443,6 +443,13 @@ function handleError(
       fallback
 }
 
+async function openRanking():
+    Promise<void> {
+  await router.push({
+    name: 'ranking',
+  })
+}
+
 /*
  * =====================================
  * INIT
@@ -473,21 +480,40 @@ onMounted(
         </h1>
       </div>
 
-      <button
-          v-if="
+     <div class="header-buttons">
+       <button
+           type="button"
+           class="
+      button
+      button-secondary
+      ranking-button
+    "
+           @click="
+      openRanking
+    "
+       >
+  <span class="ranking-button-icon">
+    🏆
+  </span>
+
+         Classement
+       </button>
+
+       <button
+           v-if="
             hasCar
           "
-          type="button"
-          class="
+           type="button"
+           class="
             refresh-button
           "
-          :disabled="
+           :disabled="
             isLoading
           "
-          @click="
+           @click="
             loadDuels
           "
-      >
+       >
         <span
             :class="{
               'refresh-icon-loading':
@@ -497,10 +523,11 @@ onMounted(
           ↻
         </span>
 
-        <span class="refresh-label">
+         <span class="refresh-label">
           Actualiser
         </span>
-      </button>
+       </button>
+     </div>
     </header>
 
     <!-- =====================================
@@ -1061,6 +1088,10 @@ onMounted(
           4vw,
           2.2rem
       );
+}
+.header-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .refresh-button {
@@ -1723,6 +1754,19 @@ onMounted(
 
 .fight-button strong {
   font-size: 0.82rem;
+}
+
+.ranking-button {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+}
+
+.ranking-button-icon {
+  font-size: 0.8rem;
 }
 
 /*

@@ -53,46 +53,21 @@ import CarVisualTestView
  * =====================================
  */
 
-import AdminDashboardView
-    from '../views/admin/AdminDashboardView.vue'
-
-import AdminUsersView
-    from '../views/admin/AdminUsersView.vue'
-
-import AdminUserDetailView
-    from '../views/admin/AdminUserDetailView.vue'
-
-import AdminCarsView
-    from '../views/admin/AdminCarsView.vue'
-
-import AdminCarDetailView
-    from '../views/admin/AdminCarDetailView.vue'
-
-import AdminDuelsView
-    from '../views/admin/AdminDuelsView.vue'
-
-import AdminDuelDetailView
-    from '../views/admin/AdminDuelDetailView.vue'
-
-import AdminCardsView
-    from '../views/admin/AdminCardsView.vue'
-
-import AdminCardDetailView
-    from '../views/admin/AdminCardDetailView.vue'
-
-import AdminEventsView
-    from '../views/admin/AdminEventsView.vue'
-
-import AdminGameSettingsView
-    from '../views/admin/AdminGameSettingsView.vue'
+import AdminDashboardView from '../views/admin/AdminDashboardView.vue'
+import AdminUsersView from '../views/admin/AdminUsersView.vue'
+import AdminUserDetailView from '../views/admin/AdminUserDetailView.vue'
+import AdminCarsView from '../views/admin/AdminCarsView.vue'
+import AdminCarDetailView from '../views/admin/AdminCarDetailView.vue'
+import AdminDuelsView from '../views/admin/AdminDuelsView.vue'
+import AdminDuelDetailView from '../views/admin/AdminDuelDetailView.vue'
+import AdminCardsView from '../views/admin/AdminCardsView.vue'
+import AdminCardDetailView from '../views/admin/AdminCardDetailView.vue'
+import AdminEventsView from '../views/admin/AdminEventsView.vue'
+import AdminGameSettingsView from '../views/admin/AdminGameSettingsView.vue'
+import RankingView from "../views/RankingView.vue"
 
 const routes:
     RouteRecordRaw[] = [
-    /*
-     * =====================================
-     * LOGIN
-     * =====================================
-     */
 
     {
         path: '/login',
@@ -106,15 +81,6 @@ const routes:
             guestOnly: true,
         },
     },
-
-    /*
-     * =====================================
-     * APPLICATION JOUEUR
-     *
-     * Toutes ces pages utilisent la
-     * navigation fixe en bas.
-     * =====================================
-     */
 
     {
         path: '/',
@@ -154,6 +120,12 @@ const routes:
             },
 
             {
+                path: 'ranking',
+                name: 'ranking',
+                component: RankingView
+            },
+
+            {
                 path: 'tournaments',
 
                 name: 'tournaments',
@@ -182,15 +154,6 @@ const routes:
         ],
     },
 
-    /*
-     * =====================================
-     * COURSE
-     *
-     * Hors GameLayout volontairement :
-     * aucune barre de navigation inférieure
-     * pendant le replay.
-     * =====================================
-     */
 
     {
         path: '/duel',

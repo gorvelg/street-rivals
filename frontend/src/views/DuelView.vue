@@ -2214,10 +2214,7 @@ onBeforeUnmount(
               </p>
 
               <strong>
-                {{
-                  updatedCar
-                      .pilotName
-                }}
+                {{updatedCar.pilotName }}
               </strong>
             </div>
 
@@ -2226,10 +2223,7 @@ onBeforeUnmount(
                 NIV.
 
                 <strong>
-                  {{
-                    updatedCar
-                        .level
-                  }}
+                  {{updatedCar.level }}
                 </strong>
               </span>
 
@@ -2237,10 +2231,7 @@ onBeforeUnmount(
                 XP
 
                 <strong>
-                  {{
-                    updatedCar
-                        .xp
-                  }}
+                  {{updatedCar.xp }}
                 </strong>
               </span>
 
@@ -2248,10 +2239,7 @@ onBeforeUnmount(
                 $
 
                 <strong>
-                  {{
-                    updatedCar
-                        .money
-                  }}
+                  {{updatedCar.money }}
                 </strong>
               </span>
             </div>
