@@ -67,10 +67,9 @@ const progress =
 <style scoped>
 .xp-progress {
   display: grid;
-
   width: 100%;
-
   gap: 6px;
+  margin-bottom: 12px;
 }
 
 .xp-progress-header {

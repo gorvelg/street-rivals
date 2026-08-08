@@ -1250,6 +1250,11 @@ onMounted(
               }}
             </h2>
 
+            <XpProgressBar
+                :current-xp="selectedCar.xp"
+                :required-xp="selectedCar.xpRequired"
+            />
+
             <div class="pilot-meta">
               <span>
                 NIV.
@@ -1302,6 +1307,8 @@ onMounted(
             Modifier
           </button>
         </div>
+
+
 
         <div class="hero-car">
           <div class="garage-floor" />
@@ -1473,16 +1480,7 @@ onMounted(
           }}
         </button>
       </nav>
-      <section>
-        <XpProgressBar
-            :current-xp="
-      selectedCar.xp
-    "
-            :required-xp="
-      selectedCar.xpRequired
-    "
-        />
-      </section>
+
       <!-- =================================
            APERÇU
       ================================== -->
