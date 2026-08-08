@@ -59,16 +59,45 @@ const replayFinished =
     ref(false)
 
 /*
- * À la fin d'une course :
- *
- * false = affiche la piste
- * true  = affiche le journal
- *
- * Pendant la course, le journal reste
- * automatiquement visible sous la piste.
+ * =====================================
+ * COUNTDOWN
+ * =====================================
  */
+
+const countdownValue =
+    ref<
+        number
+        | 'GO'
+        | null
+    >(
+        null,
+    )
+
+const countdownActive =
+    computed(
+        () =>
+            countdownValue.value
+            !== null,
+    )
+
+let countdownTimer:
+    ReturnType<typeof setTimeout>
+    | null = null
+
+/*
+ * =====================================
+ * COURSE / JOURNAL
+ * =====================================
+ */
+
 const showCombatLog =
     ref(false)
+
+/*
+ * =====================================
+ * CHOIX DE CARTE
+ * =====================================
+ */
 
 const pendingChoice =
     ref<CardChoice | null>(
@@ -95,6 +124,31 @@ const updatedCar =
     ref<Car | null>(
         null,
     )
+
+/*
+ * Le level-up devient un véritable
+ * écran indépendant.
+ */
+const levelUpActive =
+    computed(
+        () =>
+            replayFinished.value
+
+            && pendingChoice.value
+            !== null
+
+            && firstChoiceCard.value
+            !== null
+
+            && secondChoiceCard.value
+            !== null,
+    )
+
+/*
+ * =====================================
+ * TIMERS
+ * =====================================
+ */
 
 let replayTimer:
     ReturnType<typeof setInterval>
@@ -139,7 +193,8 @@ const currentEvent =
 
       return (
           events.value[
-          visibleEventCount.value - 1
+          visibleEventCount.value
+          - 1
               ]
           ?? null
       )
@@ -180,11 +235,11 @@ const progressPercent =
     })
 
 /*
- * Position générale de la course.
- *
- * 8% au départ.
- * Environ 84% en fin de course.
+ * =====================================
+ * POSITION
+ * =====================================
  */
+
 const baseRacePosition =
     computed(
         () =>
@@ -194,33 +249,45 @@ const baseRacePosition =
     )
 
 const attackerPosition =
-    computed(
-        () =>
-            clamp(
-                7,
-                91,
-                baseRacePosition.value
-                + currentGap.value
-                * 0.75,
-            ),
-    )
+    computed(() => {
+      if (
+          countdownActive.value
+      ) {
+        return 11
+      }
+
+      return clamp(
+          7,
+          91,
+          baseRacePosition.value
+          + currentGap.value
+          * 0.75,
+      )
+    })
 
 const defenderPosition =
-    computed(
-        () =>
-            clamp(
-                7,
-                91,
-                baseRacePosition.value
-                - currentGap.value
-                * 0.75,
-            ),
-    )
+    computed(() => {
+      if (
+          countdownActive.value
+      ) {
+        return 11
+      }
+
+      return clamp(
+          7,
+          91,
+          baseRacePosition.value
+          - currentGap.value
+          * 0.75,
+      )
+    })
 
 /*
- * Animation correspondant
- * à la portion du replay.
+ * =====================================
+ * MOUVEMENTS
+ * =====================================
  */
+
 const raceMotionClass =
     computed(() => {
       switch (
@@ -252,13 +319,15 @@ const raceMotionClass =
 const attackerIsLeading =
     computed(
         () =>
-            currentGap.value > 0,
+            currentGap.value
+            > 0,
     )
 
 const defenderIsLeading =
     computed(
         () =>
-            currentGap.value < 0,
+            currentGap.value
+            < 0,
     )
 
 const raceStarted =
@@ -303,7 +372,8 @@ const attackerWon =
 const winnerName =
     computed(() => {
       if (
-          duelStore.duel === null
+          duelStore.duel
+          === null
       ) {
         return ''
       }
@@ -312,6 +382,7 @@ const winnerName =
           ? duelStore.duel
               .attackerSnapshot
               .pilotName
+
           : duelStore.duel
               .defenderSnapshot
               .pilotName
@@ -326,7 +397,9 @@ const attackerRatingLabel =
 
       return value > 0
           ? `+${value}`
-          : String(value)
+          : String(
+              value,
+          )
     })
 
 function clamp(
@@ -382,18 +455,20 @@ function loadPendingDuel():
 
 /*
  * =====================================
- * LANCEMENT DU DUEL
+ * LANCEMENT
  * =====================================
  */
 
 async function startDuel():
     Promise<void> {
   if (
-      pendingDuel.value === null
+      pendingDuel.value
+      === null
   ) {
     return
   }
 
+  stopCountdown()
   stopReplay()
 
   replayStarted.value =
@@ -432,7 +507,7 @@ async function startDuel():
             .defenderCarId,
     )
 
-    startReplay()
+    startCountdown()
   } catch {
     startCooldownCountdown()
   }
@@ -440,19 +515,120 @@ async function startDuel():
 
 /*
  * =====================================
- * LECTURE DU REPLAY
+ * COUNTDOWN
+ * =====================================
+ */
+
+function startCountdown():
+    void {
+  stopCountdown()
+  stopReplay()
+
+  replayStarted.value =
+      false
+
+  replayFinished.value =
+      false
+
+  visibleEventCount.value =
+      0
+
+  showCombatLog.value =
+      false
+
+  countdownValue.value =
+      3
+
+  scheduleCountdownStep(
+      2,
+      800,
+  )
+}
+
+function scheduleCountdownStep(
+    nextValue:
+        number
+        | 'GO',
+
+    delay: number,
+): void {
+  countdownTimer =
+      setTimeout(
+          () => {
+            countdownValue.value =
+                nextValue
+
+            if (
+                nextValue
+                === 2
+            ) {
+              scheduleCountdownStep(
+                  1,
+                  800,
+              )
+
+              return
+            }
+
+            if (
+                nextValue
+                === 1
+            ) {
+              scheduleCountdownStep(
+                  'GO',
+                  800,
+              )
+
+              return
+            }
+
+            countdownTimer =
+                setTimeout(
+                    () => {
+                      countdownValue.value =
+                          null
+
+                      countdownTimer =
+                          null
+
+                      startReplay()
+                    },
+                    600,
+                )
+          },
+          delay,
+      )
+}
+
+function stopCountdown():
+    void {
+  if (
+      countdownTimer
+      !== null
+  ) {
+    clearTimeout(
+        countdownTimer,
+    )
+
+    countdownTimer =
+        null
+  }
+
+  countdownValue.value =
+      null
+}
+
+/*
+ * =====================================
+ * REPLAY
  * =====================================
  */
 
 function startReplay():
     void {
+  stopCountdown()
   stopReplay()
 
-  /*
-   * Lorsqu'on revoit la course,
-   * on repasse automatiquement
-   * sur la vue piste.
-   */
   showCombatLog.value =
       false
 
@@ -509,14 +685,6 @@ function finishReplay():
   replayFinished.value =
       true
 
-  /*
-   * IMPORTANT :
-   *
-   * Le journal disparaît automatiquement
-   * lorsque la course se termine.
-   *
-   * L'écran résultat prend sa place.
-   */
   showCombatLog.value =
       false
 
@@ -526,7 +694,8 @@ function finishReplay():
 function stopReplay():
     void {
   if (
-      replayTimer !== null
+      replayTimer
+      !== null
   ) {
     clearInterval(
         replayTimer,
@@ -539,7 +708,7 @@ function stopReplay():
 
 /*
  * =====================================
- * JOURNAL / COURSE
+ * JOURNAL
  * =====================================
  */
 
@@ -547,6 +716,7 @@ function toggleCombatLog():
     void {
   if (
       !replayFinished.value
+      || levelUpActive.value
   ) {
     return
   }
@@ -568,6 +738,7 @@ function startCooldownCountdown():
   if (
       duelStore.retryAfterSeconds
       === null
+
       || duelStore.retryAfterSeconds
       <= 0
   ) {
@@ -581,6 +752,7 @@ function startCooldownCountdown():
                 duelStore
                     .retryAfterSeconds
                 === null
+
                 || duelStore
                     .retryAfterSeconds
                 <= 1
@@ -604,7 +776,8 @@ function startCooldownCountdown():
 function stopCooldownCountdown():
     void {
   if (
-      cooldownTimer !== null
+      cooldownTimer
+      !== null
   ) {
     clearInterval(
         cooldownTimer,
@@ -624,7 +797,8 @@ function stopCooldownCountdown():
 async function loadPendingCardChoice():
     Promise<void> {
   if (
-      pendingDuel.value === null
+      pendingDuel.value
+      === null
   ) {
     return
   }
@@ -648,7 +822,9 @@ async function loadPendingCardChoice():
     const matchingChoices =
         choices
             .filter(
-                (choice) => {
+                (
+                    choice,
+                ) => {
                   const carId =
                       getRelationId(
                           choice.car,
@@ -659,7 +835,8 @@ async function loadPendingCardChoice():
                       === pendingDuel.value
                           ?.attackerCarId
 
-                      && choice.selectedCard
+                      && choice
+                          .selectedCard
                       == null
                   )
                 },
@@ -713,9 +890,12 @@ async function loadPendingCardChoice():
 
     secondChoiceCard.value =
         secondCard
-  } catch (error) {
+  } catch (
+      error
+      ) {
     if (
-        error instanceof ApiError
+        error
+        instanceof ApiError
     ) {
       duelStore.errorMessage =
           error.message
@@ -805,13 +985,19 @@ async function selectCard(
         'La carte a été ajoutée à la voiture.'
 
     /*
-     * Une réserve d'XP peut avoir créé
-     * immédiatement un nouveau choix.
+     * Si l'XP permet encore un niveau,
+     * un nouveau CardChoice sera chargé.
+     *
+     * La clé du composant changera et
+     * l'animation LEVEL UP repartira.
      */
     await loadPendingCardChoice()
-  } catch (error) {
+  } catch (
+      error
+      ) {
     if (
-        error instanceof ApiError
+        error
+        instanceof ApiError
     ) {
       duelStore.errorMessage =
           error.message
@@ -824,14 +1010,15 @@ async function selectCard(
 
 /*
  * =====================================
- * ACTUALISATION VOITURE
+ * VOITURE
  * =====================================
  */
 
 async function refreshAttackerCar():
     Promise<void> {
   if (
-      pendingDuel.value === null
+      pendingDuel.value
+      === null
   ) {
     return
   }
@@ -851,7 +1038,9 @@ async function refreshAttackerCar():
 
     updatedCar.value =
         cars.find(
-            (car) =>
+            (
+                car,
+            ) =>
                 car.id
                 === pendingDuel.value
                     ?.attackerCarId,
@@ -871,6 +1060,7 @@ async function refreshAttackerCar():
 
 async function backToDuels():
     Promise<void> {
+  stopCountdown()
   stopReplay()
   stopCooldownCountdown()
 
@@ -887,6 +1077,7 @@ async function backToDuels():
 
 async function backToGarage():
     Promise<void> {
+  stopCountdown()
   stopReplay()
   stopCooldownCountdown()
 
@@ -917,8 +1108,8 @@ onMounted(
 
 onBeforeUnmount(
     () => {
+      stopCountdown()
       stopReplay()
-
       stopCooldownCountdown()
     },
 )
@@ -930,7 +1121,14 @@ onBeforeUnmount(
          EN-TÊTE
     ====================================== -->
 
-    <div class="page-heading">
+    <div
+        v-if="
+          !levelUpActive
+        "
+        class="
+          page-heading
+        "
+    >
       <div>
         <p class="eyebrow">
           Course classée
@@ -961,7 +1159,8 @@ onBeforeUnmount(
 
     <div
         v-if="
-          pendingDuel === null
+          pendingDuel
+          === null
         "
         class="
           empty-state
@@ -1001,23 +1200,19 @@ onBeforeUnmount(
 
     <template v-else>
       <!-- =====================================
-           PRÉPARATION DU DUEL
+           PRÉ-DUEL
       ====================================== -->
 
       <section
           v-if="
-      duelStore.duel
-      === null
-    "
+            duelStore.duel
+            === null
+          "
           class="
-      duel-preview
-      versus-screen
-    "
+            duel-preview
+            versus-screen
+          "
       >
-        <!-- =====================================
-             INTRO
-        ====================================== -->
-
         <div class="versus-intro">
           <p class="eyebrow">
             Duel classé
@@ -1032,25 +1227,19 @@ onBeforeUnmount(
           </p>
         </div>
 
-        <!-- =====================================
-             VERSUS
-        ====================================== -->
-
         <div class="versus-arena">
-          <!-- =================================
-               ATTAQUANT
-          ================================== -->
+          <!-- ATTAQUANT -->
 
           <article
               class="
-          versus-driver
-          versus-driver-attacker
-        "
+                versus-driver
+                versus-driver-attacker
+              "
           >
             <div class="driver-heading">
-        <span class="driver-role">
-          Attaquant
-        </span>
+              <span class="driver-role">
+                Attaquant
+              </span>
 
               <strong>
                 {{
@@ -1060,40 +1249,37 @@ onBeforeUnmount(
               </strong>
             </div>
 
-            <div
-                class="
-            versus-car-stage
-            attacker-car-stage
-          "
-            >
-              <div class="versus-car-shadow" />
+            <div class="versus-car-stage">
+              <div
+                  class="
+                    versus-car-shadow
+                  "
+              />
 
               <div class="versus-car-entry">
                 <CarVisual
                     :color="
-                pendingDuel
-                    .attackerColor
-              "
+                      pendingDuel
+                          .attackerColor
+                    "
                     :body-style="
-                pendingDuel
-                    .attackerBodyStyle
-              "
+                      pendingDuel
+                          .attackerBodyStyle
+                    "
                     :wheel-style="
-                pendingDuel
-                    .attackerWheelStyle
-              "
+                      pendingDuel
+                          .attackerWheelStyle
+                    "
                     :pilot-name="
-                pendingDuel
-                    .attackerPilotName
-              "
+                      pendingDuel
+                          .attackerPilotName
+                    "
                 />
               </div>
             </div>
           </article>
 
-          <!-- =================================
-               VS
-          ================================== -->
+          <!-- VS -->
 
           <div class="versus-center">
             <span class="versus-line" />
@@ -1105,20 +1291,18 @@ onBeforeUnmount(
             <span class="versus-line" />
           </div>
 
-          <!-- =================================
-               DÉFENSEUR
-          ================================== -->
+          <!-- DEFENSEUR -->
 
           <article
               class="
-          versus-driver
-          versus-driver-defender
-        "
+                versus-driver
+                versus-driver-defender
+              "
           >
             <div class="driver-heading">
-        <span class="driver-role">
-          Défenseur
-        </span>
+              <span class="driver-role">
+                Défenseur
+              </span>
 
               <strong>
                 {{
@@ -1128,100 +1312,92 @@ onBeforeUnmount(
               </strong>
             </div>
 
-            <div
-                class="
-            versus-car-stage
-            defender-car-stage
-          "
-            >
-              <div class="versus-car-shadow" />
+            <div class="versus-car-stage">
+              <div
+                  class="
+                    versus-car-shadow
+                  "
+              />
 
               <div
                   class="
-              versus-car-entry
-              defender-car-visual
-            "
+                    versus-car-entry
+                    defender-car-visual
+                  "
               >
                 <CarVisual
                     :color="
-                pendingDuel
-                    .defenderColor
-              "
+                      pendingDuel
+                          .defenderColor
+                    "
                     :body-style="
-                pendingDuel
-                    .defenderBodyStyle
-              "
+                      pendingDuel
+                          .defenderBodyStyle
+                    "
                     :wheel-style="
-                pendingDuel
-                    .defenderWheelStyle
-              "
+                      pendingDuel
+                          .defenderWheelStyle
+                    "
                     :pilot-name="
-                pendingDuel
-                    .defenderPilotName
-              "
+                      pendingDuel
+                          .defenderPilotName
+                    "
                 />
               </div>
             </div>
           </article>
         </div>
 
-        <!-- =====================================
-             DIFFICULTÉ
-        ====================================== -->
-
         <div class="duel-briefing">
-    <span>
-      Difficulté estimée
-    </span>
+          <span>
+            Difficulté estimée
+          </span>
 
           <strong>
             {{
-              pendingDuel.difficulty
+              pendingDuel
+                  .difficulty
             }}
           </strong>
         </div>
 
-        <!-- =====================================
-             ERREUR / COOLDOWN
-        ====================================== -->
-
         <p
             v-if="
-        duelStore.errorMessage
-        !== ''
-      "
+              duelStore
+                  .errorMessage
+              !== ''
+            "
             class="
-        alert
-        alert-error
-        versus-error
-      "
+              alert
+              alert-error
+              versus-error
+            "
         >
           {{ duelStore.errorMessage }}
 
           <span
               v-if="
-          duelStore.retryAfterSeconds
-          !== null
-          && duelStore.retryAfterSeconds
-          > 0
-        "
+                duelStore
+                    .retryAfterSeconds
+                !== null
+
+                && duelStore
+                    .retryAfterSeconds
+                > 0
+              "
           >
-      Nouvelle tentative possible dans
+            Nouvelle tentative possible dans
 
-      <strong>
-        {{
-          duelStore
-              .retryAfterSeconds
-        }}
-      </strong>
+            <strong>
+              {{
+                duelStore
+                    .retryAfterSeconds
+              }}
+            </strong>
 
-      seconde(s).
-    </span>
+            seconde(s).
+          </span>
         </p>
-
-        <!-- =====================================
-             ACTION
-        ====================================== -->
 
         <div class="versus-action">
           <p>
@@ -1231,31 +1407,35 @@ onBeforeUnmount(
           <button
               type="button"
               class="
-          button
-          button-primary
-          launch-duel-button
-        "
+                button
+                button-primary
+                launch-duel-button
+              "
               :disabled="
-          duelStore.loading
-          || (
-            duelStore.retryAfterSeconds
-            !== null
-            && duelStore.retryAfterSeconds
-            > 0
-          )
-        "
+                duelStore.loading
+
+                || (
+                  duelStore
+                      .retryAfterSeconds
+                  !== null
+
+                  && duelStore
+                      .retryAfterSeconds
+                  > 0
+                )
+              "
               @click="
-          startDuel
-        "
+                startDuel
+              "
           >
             <template
                 v-if="
-            duelStore.loading
-          "
+                  duelStore.loading
+                "
             >
-        <span class="launch-spinner">
-          ↻
-        </span>
+              <span class="launch-spinner">
+                ↻
+              </span>
 
               Préparation de la course...
             </template>
@@ -1264,22 +1444,22 @@ onBeforeUnmount(
               Lancer le duel
 
               <span class="launch-arrow">
-          →
-        </span>
+                →
+              </span>
             </template>
           </button>
 
           <button
               type="button"
               class="
-          change-opponent-button
-        "
+                change-opponent-button
+              "
               :disabled="
-          duelStore.loading
-        "
+                duelStore.loading
+              "
               @click="
-          backToDuels
-        "
+                backToDuels
+              "
           >
             Choisir un autre adversaire
           </button>
@@ -1287,21 +1467,24 @@ onBeforeUnmount(
       </section>
 
       <!-- =====================================
-           DUEL EXISTANT
+           DUEL
       ====================================== -->
 
       <template v-else>
         <!-- =====================================
              COURSE
 
-             Après la fin :
-             cachée si le journal est demandé.
+             Masquée pendant le level-up.
         ====================================== -->
 
         <section
             v-if="
-              !replayFinished
-              || !showCombatLog
+              !levelUpActive
+
+              && (
+                !replayFinished
+                || !showCombatLog
+              )
             "
             class="
               panel
@@ -1313,6 +1496,7 @@ onBeforeUnmount(
             <div>
               <p class="eyebrow">
                 Moteur
+
                 {{
                   duelStore.duel
                       .engineVersion
@@ -1336,15 +1520,11 @@ onBeforeUnmount(
               </h2>
             </div>
 
-            <!--
-              Après la course, le bouton
-              "Revoir" se trouve dans la fenêtre
-              de progression.
-            -->
-
             <button
                 v-if="
                   !replayFinished
+                  && !countdownActive
+                  && replayStarted
                 "
                 type="button"
                 class="
@@ -1359,12 +1539,12 @@ onBeforeUnmount(
             </button>
           </div>
 
-          <!-- =================================
-               PISTE
-          ================================== -->
+          <!-- PISTE -->
 
           <div
-              class="race-track"
+              class="
+                race-track
+              "
               :class="{
                 'race-track-running':
                   raceStarted
@@ -1372,6 +1552,9 @@ onBeforeUnmount(
 
                 'race-track-finished':
                   replayFinished,
+
+                'race-track-countdown':
+                  countdownActive,
               }"
           >
             <div class="road-background">
@@ -1399,7 +1582,9 @@ onBeforeUnmount(
                   v-if="
                     finishVisible
                   "
-                  class="finish-line"
+                  class="
+                    finish-line
+                  "
               >
                 <span>
                   ARRIVÉE
@@ -1419,6 +1604,9 @@ onBeforeUnmount(
                   {
                     'race-car-leading':
                       attackerIsLeading,
+
+                    'race-car-grid':
+                      countdownActive,
                   },
                 ]"
                 :style="{
@@ -1436,6 +1624,7 @@ onBeforeUnmount(
                 <span
                     v-if="
                       attackerIsLeading
+                      && !countdownActive
                     "
                     class="
                       leader-badge
@@ -1445,11 +1634,7 @@ onBeforeUnmount(
                 </span>
               </div>
 
-              <div
-                  class="
-                    race-car-visual
-                  "
-              >
+              <div class="race-car-visual">
                 <CarVisual
                     :color="
                       duelStore.duel
@@ -1489,6 +1674,9 @@ onBeforeUnmount(
                   {
                     'race-car-leading':
                       defenderIsLeading,
+
+                    'race-car-grid':
+                      countdownActive,
                   },
                 ]"
                 :style="{
@@ -1506,6 +1694,7 @@ onBeforeUnmount(
                 <span
                     v-if="
                       defenderIsLeading
+                      && !countdownActive
                     "
                     class="
                       leader-badge
@@ -1515,11 +1704,7 @@ onBeforeUnmount(
                 </span>
               </div>
 
-              <div
-                  class="
-                    race-car-visual
-                  "
-              >
+              <div class="race-car-visual">
                 <CarVisual
                     :color="
                       duelStore.duel
@@ -1547,7 +1732,16 @@ onBeforeUnmount(
               </div>
             </div>
 
-            <div class="race-progress">
+            <!-- PROGRESSION -->
+
+            <div
+                v-if="
+                  !countdownActive
+                "
+                class="
+                  race-progress
+                "
+            >
               <span
                   :style="{
                     width:
@@ -1555,11 +1749,71 @@ onBeforeUnmount(
                   }"
               />
             </div>
+
+            <!-- COUNTDOWN -->
+
+            <div
+                v-if="
+                  countdownActive
+                "
+                class="
+                  countdown-overlay
+                "
+            >
+              <div class="countdown-backdrop" />
+
+              <div
+                  :key="
+                    countdownValue
+                  "
+                  class="
+                    countdown-content
+                  "
+                  :class="{
+                    'countdown-go':
+                      countdownValue
+                      === 'GO',
+                  }"
+              >
+                <span
+                    v-if="
+                      countdownValue
+                      !== 'GO'
+                    "
+                    class="
+                      countdown-label
+                    "
+                >
+                  PRÉPAREZ-VOUS
+                </span>
+
+                <strong>
+                  {{
+                    countdownValue
+                  }}
+                </strong>
+
+                <span
+                    v-if="
+                      countdownValue
+                      === 'GO'
+                    "
+                    class="
+                      countdown-launch-label
+                    "
+                >
+                  C'EST PARTI !
+                </span>
+              </div>
+            </div>
           </div>
 
-          <!-- ÉTAT COURSE -->
+          <!-- STATUS -->
 
           <div
+              v-if="
+                !countdownActive
+              "
               class="
                 current-race-status
               "
@@ -1586,7 +1840,8 @@ onBeforeUnmount(
 
             <span
                 v-if="
-                  currentEvent !== null
+                  currentEvent
+                  !== null
                 "
             >
               Section :
@@ -1601,19 +1856,23 @@ onBeforeUnmount(
         </section>
 
         <!-- =====================================
-             JOURNAL DE COMBAT
+             JOURNAL
 
-             Pendant le replay :
-             toujours visible.
-
-             Après le replay :
-             visible uniquement sur demande.
+             Masqué durant level-up.
         ====================================== -->
 
         <div
             v-if="
-              !replayFinished
-              || showCombatLog
+              !levelUpActive
+
+              && (
+                (
+                  !replayFinished
+                  && !countdownActive
+                )
+
+                || showCombatLog
+              )
             "
             class="
               combat-log-view
@@ -1679,12 +1938,62 @@ onBeforeUnmount(
         </div>
 
         <!-- =====================================
+             LEVEL UP
+
+             Remplace tout le contenu
+             intermédiaire.
+        ====================================== -->
+
+        <CardChoicePanel
+            v-if="
+              levelUpActive
+
+              && pendingChoice
+              !== null
+
+              && firstChoiceCard
+              !== null
+
+              && secondChoiceCard
+              !== null
+            "
+            :key="
+              pendingChoice.id
+            "
+            :level="
+              pendingChoice.level
+            "
+            :pilot-name="
+              pendingDuel
+                  .attackerPilotName
+            "
+            :first-card="
+              firstChoiceCard
+            "
+            :second-card="
+              secondChoiceCard
+            "
+            :loading="
+              loadingChoice
+            "
+            :success-message="
+              choiceSuccessMessage
+            "
+            @select="
+              selectCard
+            "
+        />
+
+        <!-- =====================================
              RÉSULTAT
+
+             Disparaît pendant le level-up.
         ====================================== -->
 
         <section
             v-if="
               replayFinished
+              && !levelUpActive
             "
             class="
               duel-result
@@ -1734,7 +2043,7 @@ onBeforeUnmount(
             </p>
           </div>
 
-          <!-- RÉCOMPENSES -->
+          <!-- RECOMPENSES -->
 
           <div class="result-rewards">
             <article>
@@ -1798,7 +2107,7 @@ onBeforeUnmount(
             </article>
           </div>
 
-          <!-- ANTI FARMING -->
+          <!-- ANTI FARM -->
 
           <div class="pair-duels">
             <span>
@@ -1852,57 +2161,37 @@ onBeforeUnmount(
         </section>
 
         <!-- =====================================
-             MESSAGE CARTE
+             MESSAGE FINAL DE CARTE
         ====================================== -->
 
         <p
             v-if="
-              choiceSuccessMessage
+              replayFinished
+
+              && !levelUpActive
+
+              && choiceSuccessMessage
               !== ''
             "
             class="
               alert
               alert-success
+              final-card-message
             "
         >
           {{ choiceSuccessMessage }}
         </p>
 
         <!-- =====================================
-             CHOIX DE CARTE
-        ====================================== -->
-
-        <CardChoicePanel
-            v-if="
-              replayFinished
-              && pendingChoice !== null
-              && firstChoiceCard !== null
-              && secondChoiceCard !== null
-            "
-            :level="
-              pendingChoice.level
-            "
-            :first-card="
-              firstChoiceCard
-            "
-            :second-card="
-              secondChoiceCard
-            "
-            :loading="
-              loadingChoice
-            "
-            @select="
-              selectCard
-            "
-        />
-
-        <!-- =====================================
-             PROGRESSION / ACTIONS
+             PROGRESSION FINALE
         ====================================== -->
 
         <section
-            v-else-if="
+            v-if="
               replayFinished
+
+              && !levelUpActive
+
               && !loadingChoice
             "
             class="
@@ -1910,11 +2199,10 @@ onBeforeUnmount(
               duel-end-actions
             "
         >
-          <!-- PROGRESSION -->
-
           <div
               v-if="
-                updatedCar !== null
+                updatedCar
+                !== null
               "
               class="
                 updated-car-summary
@@ -1927,7 +2215,8 @@ onBeforeUnmount(
 
               <strong>
                 {{
-                  updatedCar.pilotName
+                  updatedCar
+                      .pilotName
                 }}
               </strong>
             </div>
@@ -1938,7 +2227,8 @@ onBeforeUnmount(
 
                 <strong>
                   {{
-                    updatedCar.level
+                    updatedCar
+                        .level
                   }}
                 </strong>
               </span>
@@ -1948,7 +2238,8 @@ onBeforeUnmount(
 
                 <strong>
                   {{
-                    updatedCar.xp
+                    updatedCar
+                        .xp
                   }}
                 </strong>
               </span>
@@ -1958,7 +2249,8 @@ onBeforeUnmount(
 
                 <strong>
                   {{
-                    updatedCar.money
+                    updatedCar
+                        .money
                   }}
                 </strong>
               </span>
@@ -2117,12 +2409,6 @@ onBeforeUnmount(
   pointer-events: none;
 }
 
-/*
- * =====================================
- * INTRO
- * =====================================
- */
-
 .versus-intro {
   position: relative;
 
@@ -2155,12 +2441,6 @@ onBeforeUnmount(
   opacity: 0.42;
 }
 
-/*
- * =====================================
- * ARENA
- * =====================================
- */
-
 .versus-arena {
   position: relative;
 
@@ -2188,12 +2468,6 @@ onBeforeUnmount(
       0
       0;
 }
-
-/*
- * =====================================
- * PILOTES
- * =====================================
- */
 
 .versus-driver {
   min-width: 0;
@@ -2241,12 +2515,6 @@ onBeforeUnmount(
   white-space: nowrap;
 }
 
-/*
- * =====================================
- * STAGE DES VOITURES
- * =====================================
- */
-
 .versus-car-stage {
   position: relative;
 
@@ -2282,9 +2550,6 @@ onBeforeUnmount(
       blur(9px);
 }
 
-/*
- * Voiture gauche.
- */
 .versus-driver-attacker
 .versus-car-entry {
   animation:
@@ -2299,10 +2564,6 @@ onBeforeUnmount(
       both;
 }
 
-/*
- * La voiture droite est inversée afin
- * que les deux véhicules se regardent.
- */
 .defender-car-visual {
   transform:
       scaleX(-1);
@@ -2322,12 +2583,6 @@ onBeforeUnmount(
       )
       both;
 }
-
-/*
- * =====================================
- * VS
- * =====================================
- */
 
 .versus-center {
   display: grid;
@@ -2428,12 +2683,6 @@ onBeforeUnmount(
       both;
 }
 
-/*
- * =====================================
- * BRIEFING
- * =====================================
- */
-
 .duel-briefing {
   position: relative;
 
@@ -2487,12 +2736,6 @@ onBeforeUnmount(
 
   text-transform: capitalize;
 }
-
-/*
- * =====================================
- * ACTION
- * =====================================
- */
 
 .versus-action {
   position: relative;
@@ -2608,172 +2851,7 @@ onBeforeUnmount(
 
 /*
  * =====================================
- * ANIMATIONS VS
- * =====================================
- */
-
-@keyframes versus-attacker-enter {
-  from {
-    opacity: 0;
-
-    transform:
-        translateX(-55px);
-  }
-
-  to {
-    opacity: 1;
-
-    transform:
-        translateX(0);
-  }
-}
-
-@keyframes versus-defender-enter {
-  from {
-    opacity: 0;
-
-    transform:
-        translateX(55px)
-        scaleX(-1);
-  }
-
-  to {
-    opacity: 1;
-
-    transform:
-        translateX(0)
-        scaleX(-1);
-  }
-}
-
-@keyframes versus-badge-enter {
-  from {
-    opacity: 0;
-
-    transform:
-        scale(0.6)
-        rotate(-12deg);
-  }
-
-  to {
-    opacity: 1;
-
-    transform:
-        scale(1)
-        rotate(0);
-  }
-}
-
-@keyframes versus-spinner {
-  to {
-    transform:
-        rotate(360deg);
-  }
-}
-
-/*
- * =====================================
- * VS MOBILE
- * =====================================
- */
-
-@media (
-max-width: 700px
-) {
-  .versus-screen {
-    padding:
-        20px
-        12px
-        16px;
-  }
-
-  .versus-arena {
-    grid-template-columns:
-        minmax(
-            0,
-            1fr
-        )
-        48px
-        minmax(
-            0,
-            1fr
-        );
-
-    gap: 2px;
-
-    margin-top: 14px;
-  }
-
-  .driver-role {
-    font-size: 0.48rem;
-  }
-
-  .driver-heading strong {
-    font-size: 0.95rem;
-  }
-
-  .versus-car-stage {
-    margin:
-        -2px
-        auto;
-  }
-
-  .versus-badge {
-    width: 42px;
-    height: 42px;
-
-    font-size: 0.78rem;
-  }
-
-  .versus-line {
-    height: 27px;
-  }
-
-  .duel-briefing {
-    margin-top: 4px;
-  }
-}
-
-@media (
-max-width: 420px
-) {
-  .versus-screen {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .versus-arena {
-    grid-template-columns:
-        minmax(
-            0,
-            1fr
-        )
-        38px
-        minmax(
-            0,
-            1fr
-        );
-  }
-
-  .versus-badge {
-    width: 34px;
-    height: 34px;
-
-    font-size: 0.67rem;
-  }
-
-  .versus-line {
-    height: 20px;
-  }
-
-  .driver-heading strong {
-    font-size: 0.82rem;
-  }
-}
-
-/*
- * =====================================
- * DUEL VIDE
+ * VIDE
  * =====================================
  */
 
@@ -2826,7 +2904,7 @@ max-width: 420px
 
 /*
  * =====================================
- * TRANSITION COURSE / JOURNAL
+ * COURSE / JOURNAL
  * =====================================
  */
 
@@ -2854,22 +2932,6 @@ max-width: 420px
 
 .combat-log-heading h2 {
   margin: 0;
-}
-
-@keyframes duel-view-enter {
-  from {
-    opacity: 0;
-
-    transform:
-        translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-
-    transform:
-        translateY(0);
-  }
 }
 
 /*
@@ -2903,12 +2965,6 @@ max-width: 420px
 
   isolation: isolate;
 }
-
-/*
- * =====================================
- * ROUTE
- * =====================================
- */
 
 .road-background {
   position: absolute;
@@ -2967,9 +3023,6 @@ max-width: 420px
       infinite;
 }
 
-/*
- * Bordures rouge / blanc.
- */
 .road-edge {
   position: absolute;
 
@@ -3005,9 +3058,6 @@ max-width: 420px
       infinite;
 }
 
-/*
- * Ligne centrale.
- */
 .road-center-line {
   position: absolute;
 
@@ -3050,12 +3100,6 @@ max-width: 420px
       linear
       infinite;
 }
-
-/*
- * =====================================
- * ARRIVÉE
- * =====================================
- */
 
 .finish-line {
   position: absolute;
@@ -3113,7 +3157,6 @@ max-width: 420px
   background: #15171a;
 
   font-size: 0.58rem;
-
   font-weight: 900;
 
   letter-spacing: 0.08em;
@@ -3168,7 +3211,6 @@ max-width: 420px
   display: flex;
 
   align-items: center;
-
   justify-content: center;
 
   gap: 6px;
@@ -3176,7 +3218,6 @@ max-width: 420px
   margin-bottom: -12px;
 
   font-size: 0.68rem;
-
   font-weight: 900;
 
   white-space: nowrap;
@@ -3197,7 +3238,6 @@ max-width: 420px
   display: inline-flex;
 
   align-items: center;
-
   justify-content: center;
 
   width: 19px;
@@ -3224,7 +3264,6 @@ max-width: 420px
       rgba(
           0,
           0,
-          0,
           0.35
       );
 }
@@ -3233,9 +3272,14 @@ max-width: 420px
   z-index: 6;
 }
 
+.race-car-grid
+.race-car-visual {
+  animation: none;
+}
+
 /*
  * =====================================
- * ANIMATIONS PAR ÉVÉNEMENT
+ * MOUVEMENTS
  * =====================================
  */
 
@@ -3291,7 +3335,7 @@ max-width: 420px
 
 /*
  * =====================================
- * PROGRESSION DE COURSE
+ * PROGRESSION
  * =====================================
  */
 
@@ -3336,7 +3380,149 @@ max-width: 420px
 
 /*
  * =====================================
- * STATUT SOUS LA PISTE
+ * COUNTDOWN
+ * =====================================
+ */
+
+.countdown-overlay {
+  position: absolute;
+
+  inset: 0;
+
+  z-index: 50;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+}
+
+.countdown-backdrop {
+  position: absolute;
+
+  inset: 0;
+
+  background:
+      radial-gradient(
+          circle at center,
+          rgba(
+              15,
+              17,
+              21,
+              0.25
+          ),
+          rgba(
+              15,
+              17,
+              21,
+              0.8
+          )
+      );
+
+  backdrop-filter:
+      blur(2px);
+}
+
+.countdown-content {
+  position: relative;
+
+  z-index: 2;
+
+  display: grid;
+
+  justify-items: center;
+
+  animation:
+      countdown-pop
+      500ms
+      cubic-bezier(
+          0.2,
+          0.9,
+          0.3,
+          1
+      );
+}
+
+.countdown-content strong {
+  font-size:
+      clamp(
+          5rem,
+          18vw,
+          10rem
+      );
+
+  font-weight: 950;
+
+  line-height: 0.9;
+
+  letter-spacing: -0.08em;
+
+  text-shadow:
+      0
+      12px
+      40px
+      rgba(
+          0,
+          0,
+          0,
+          0.55
+      );
+}
+
+.countdown-label {
+  margin-bottom: 12px;
+
+  font-size: 0.65rem;
+  font-weight: 900;
+
+  letter-spacing: 0.2em;
+
+  text-transform: uppercase;
+
+  opacity: 0.55;
+}
+
+.countdown-go strong {
+  font-size:
+      clamp(
+          4rem,
+          17vw,
+          8rem
+      );
+
+  letter-spacing: -0.06em;
+}
+
+.countdown-launch-label {
+  margin-top: 13px;
+
+  font-size: 0.65rem;
+  font-weight: 900;
+
+  letter-spacing: 0.18em;
+
+  text-transform: uppercase;
+
+  opacity: 0.65;
+}
+
+.countdown-go {
+  animation:
+      countdown-go
+      600ms
+      cubic-bezier(
+          0.15,
+          0.8,
+          0.3,
+          1
+      );
+}
+
+/*
+ * =====================================
+ * STATUS
  * =====================================
  */
 
@@ -3499,12 +3685,6 @@ max-width: 420px
   margin-left: 4px;
 }
 
-/*
- * =====================================
- * RÉCOMPENSES
- * =====================================
- */
-
 .result-rewards {
   display: grid;
 
@@ -3558,12 +3738,6 @@ max-width: 420px
   opacity: 0.37;
 }
 
-/*
- * =====================================
- * ANTI FARMING
- * =====================================
- */
-
 .pair-duels {
   display: flex;
 
@@ -3604,9 +3778,13 @@ max-width: 420px
   text-align: left;
 }
 
+.final-card-message {
+  margin-top: 10px;
+}
+
 /*
  * =====================================
- * FIN DU DUEL
+ * FIN
  * =====================================
  */
 
@@ -3692,12 +3870,6 @@ max-width: 420px
   opacity: 0.65;
 }
 
-/*
- * Nouveau duel
- * Revoir la course
- * Journal
- * Garage
- */
 .duel-end-buttons {
   display: grid;
 
@@ -3734,8 +3906,7 @@ max-width: 420px
 
   border: 0;
 
-  background:
-      transparent;
+  background: transparent;
 
   color: inherit;
 
@@ -3755,6 +3926,65 @@ max-width: 420px
  * ANIMATIONS
  * =====================================
  */
+
+@keyframes versus-attacker-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateX(-55px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateX(0);
+  }
+}
+
+@keyframes versus-defender-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateX(55px)
+        scaleX(-1);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateX(0)
+        scaleX(-1);
+  }
+}
+
+@keyframes versus-badge-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        scale(0.6)
+        rotate(-12deg);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        scale(1)
+        rotate(0);
+  }
+}
+
+@keyframes versus-spinner {
+  to {
+    transform:
+        rotate(360deg);
+  }
+}
 
 @keyframes road-scroll {
   from {
@@ -3842,7 +4072,7 @@ max-width: 420px
 @keyframes car-turn {
   0% {
     transform:
-        rotate(0deg);
+        rotate(0);
   }
 
   40% {
@@ -3853,7 +4083,7 @@ max-width: 420px
 
   100% {
     transform:
-        rotate(0deg);
+        rotate(0);
   }
 }
 
@@ -3861,7 +4091,7 @@ max-width: 420px
   0% {
     transform:
         translateY(0)
-        rotate(0deg);
+        rotate(0);
   }
 
   25% {
@@ -3879,7 +4109,7 @@ max-width: 420px
   100% {
     transform:
         translateY(0)
-        rotate(0deg);
+        rotate(0);
   }
 }
 
@@ -3910,14 +4140,73 @@ max-width: 420px
 }
 
 @keyframes car-finish {
-  0% {
+  from {
     transform:
         translateX(0);
   }
 
-  100% {
+  to {
     transform:
         translateX(12px);
+  }
+}
+
+@keyframes countdown-pop {
+  0% {
+    opacity: 0;
+
+    transform:
+        scale(1.7);
+  }
+
+  40% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+
+    transform:
+        scale(1);
+  }
+}
+
+@keyframes countdown-go {
+  0% {
+    opacity: 0;
+
+    transform:
+        scale(0.6);
+  }
+
+  35% {
+    opacity: 1;
+
+    transform:
+        scale(1.08);
+  }
+
+  100% {
+    opacity: 0.9;
+
+    transform:
+        scale(1);
+  }
+}
+
+@keyframes duel-view-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateY(0);
   }
 }
 
@@ -3971,21 +4260,57 @@ max-width: 900px
 @media (
 max-width: 700px
 ) {
-  .versus-grid {
+  .versus-screen {
+    padding:
+        20px
+        12px
+        16px;
+  }
+
+  .versus-arena {
     grid-template-columns:
-        1fr;
+        minmax(
+            0,
+            1fr
+        )
+        48px
+        minmax(
+            0,
+            1fr
+        );
+
+    gap: 2px;
+
+    margin-top: 14px;
   }
 
-  .versus-symbol {
+  .driver-role {
+    font-size: 0.48rem;
+  }
+
+  .driver-heading strong {
+    font-size: 0.95rem;
+  }
+
+  .versus-car-stage {
     margin:
-        -10px
-        0;
-
-    text-align: center;
+        -2px
+        auto;
   }
 
-  .versus-car-visual {
-    max-width: 280px;
+  .versus-badge {
+    width: 42px;
+    height: 42px;
+
+    font-size: 0.78rem;
+  }
+
+  .versus-line {
+    height: 27px;
+  }
+
+  .duel-briefing {
+    margin-top: 4px;
   }
 
   .race-track {
@@ -4018,9 +4343,10 @@ max-width: 700px
     font-size: 0.7rem;
   }
 
-  /*
-   * JOURNAL
-   */
+  .countdown-label,
+  .countdown-launch-label {
+    font-size: 0.55rem;
+  }
 
   .combat-log-heading {
     align-items: stretch;
@@ -4032,10 +4358,6 @@ max-width: 700px
   .button {
     width: 100%;
   }
-
-  /*
-   * RÉSULTAT
-   */
 
   .duel-result {
     padding:
@@ -4052,10 +4374,6 @@ max-width: 700px
         10px
         5px;
   }
-
-  /*
-   * PROGRESSION
-   */
 
   .updated-car-summary {
     align-items: flex-start;
@@ -4107,6 +4425,43 @@ max-width: 450px
 
   .race-car-defender {
     bottom: 29px;
+  }
+}
+
+@media (
+max-width: 420px
+) {
+  .versus-screen {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .versus-arena {
+    grid-template-columns:
+        minmax(
+            0,
+            1fr
+        )
+        38px
+        minmax(
+            0,
+            1fr
+        );
+  }
+
+  .versus-badge {
+    width: 34px;
+    height: 34px;
+
+    font-size: 0.67rem;
+  }
+
+  .versus-line {
+    height: 20px;
+  }
+
+  .driver-heading strong {
+    font-size: 0.82rem;
   }
 }
 </style>
