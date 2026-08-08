@@ -58,6 +58,18 @@ const replayStarted =
 const replayFinished =
     ref(false)
 
+/*
+ * À la fin d'une course :
+ *
+ * false = affiche la piste
+ * true  = affiche le journal
+ *
+ * Pendant la course, le journal reste
+ * automatiquement visible sous la piste.
+ */
+const showCombatLog =
+    ref(false)
+
 const pendingChoice =
     ref<CardChoice | null>(
         null,
@@ -172,9 +184,6 @@ const progressPercent =
  *
  * 8% au départ.
  * Environ 84% en fin de course.
- *
- * L'écart entre les voitures est ensuite
- * ajouté autour de cette position.
  */
 const baseRacePosition =
     computed(
@@ -209,8 +218,8 @@ const defenderPosition =
     )
 
 /*
- * Animation visuelle correspondant
- * à la portion du replay actuellement jouée.
+ * Animation correspondant
+ * à la portion du replay.
  */
 const raceMotionClass =
     computed(() => {
@@ -393,10 +402,22 @@ async function startDuel():
   replayFinished.value =
       false
 
+  showCombatLog.value =
+      false
+
   visibleEventCount.value =
       0
 
   pendingChoice.value =
+      null
+
+  firstChoiceCard.value =
+      null
+
+  secondChoiceCard.value =
+      null
+
+  updatedCar.value =
       null
 
   choiceSuccessMessage.value =
@@ -426,6 +447,14 @@ async function startDuel():
 function startReplay():
     void {
   stopReplay()
+
+  /*
+   * Lorsqu'on revoit la course,
+   * on repasse automatiquement
+   * sur la vue piste.
+   */
+  showCombatLog.value =
+      false
 
   replayStarted.value =
       true
@@ -464,6 +493,9 @@ function skipReplay():
 
 function replayAgain():
     void {
+  showCombatLog.value =
+      false
+
   startReplay()
 }
 
@@ -476,6 +508,17 @@ function finishReplay():
 
   replayFinished.value =
       true
+
+  /*
+   * IMPORTANT :
+   *
+   * Le journal disparaît automatiquement
+   * lorsque la course se termine.
+   *
+   * L'écran résultat prend sa place.
+   */
+  showCombatLog.value =
+      false
 
   void loadPendingCardChoice()
 }
@@ -492,6 +535,24 @@ function stopReplay():
     replayTimer =
         null
   }
+}
+
+/*
+ * =====================================
+ * JOURNAL / COURSE
+ * =====================================
+ */
+
+function toggleCombatLog():
+    void {
+  if (
+      !replayFinished.value
+  ) {
+    return
+  }
+
+  showCombatLog.value =
+      !showCombatLog.value
 }
 
 /*
@@ -761,6 +822,12 @@ async function selectCard(
   }
 }
 
+/*
+ * =====================================
+ * ACTUALISATION VOITURE
+ * =====================================
+ */
+
 async function refreshAttackerCar():
     Promise<void> {
   if (
@@ -770,10 +837,26 @@ async function refreshAttackerCar():
   }
 
   try {
-    updatedCar.value =
-        await apiRequest<Car>(
-            `/api/cars/${pendingDuel.value.attackerCarId}`,
+    const response =
+        await apiRequest<
+            ApiCollection<Car>
+        >(
+            '/api/cars',
         )
+
+    const cars =
+        getCollectionMembers(
+            response,
+        )
+
+    updatedCar.value =
+        cars.find(
+            (car) =>
+                car.id
+                === pendingDuel.value
+                    ?.attackerCarId,
+        )
+        ?? null
   } catch {
     updatedCar.value =
         null
@@ -799,6 +882,22 @@ async function backToDuels():
 
   await router.push({
     name: 'duels',
+  })
+}
+
+async function backToGarage():
+    Promise<void> {
+  stopReplay()
+  stopCooldownCountdown()
+
+  sessionStorage.removeItem(
+      'street-rivals-pending-duel',
+  )
+
+  duelStore.reset()
+
+  await router.push({
+    name: 'garage',
   })
 }
 
@@ -852,7 +951,7 @@ onBeforeUnmount(
             backToDuels
           "
       >
-        Retour aux Duels
+        Quitter la course
       </button>
     </div>
 
@@ -864,14 +963,26 @@ onBeforeUnmount(
         v-if="
           pendingDuel === null
         "
-        class="empty-state"
+        class="
+          empty-state
+          duel-empty-state
+        "
     >
+      <div class="empty-duel-symbol">
+        VS
+      </div>
+
+      <p class="eyebrow">
+        Matchmaking
+      </p>
+
       <h2>
         Aucun duel préparé
       </h2>
 
       <p>
-        Sélectionne un adversaire depuis le matchmaking.
+        Choisis un adversaire avant de lancer
+        une nouvelle course.
       </p>
 
       <button
@@ -884,7 +995,7 @@ onBeforeUnmount(
             backToDuels
           "
       >
-        Ouvrir les duels
+        Trouver un adversaire
       </button>
     </div>
 
@@ -895,175 +1006,307 @@ onBeforeUnmount(
 
       <section
           v-if="
-            duelStore.duel
-            === null
-          "
+      duelStore.duel
+      === null
+    "
           class="
-            panel
-            duel-preview
-          "
+      duel-preview
+      versus-screen
+    "
       >
-        <div class="versus-grid">
-          <!-- ATTAQUANT -->
+        <!-- =====================================
+             INTRO
+        ====================================== -->
 
-          <div class="versus-car">
-            <div
-                class="
-                  versus-car-visual
-                "
-            >
-              <CarVisual
-                  :color="
-                    pendingDuel
-                        .attackerColor
-                  "
-                  :body-style="
-                    pendingDuel
-                        .attackerBodyStyle
-                  "
-                  :wheel-style="
-                    pendingDuel
-                        .attackerWheelStyle
-                  "
-                  :pilot-name="
-                    pendingDuel
-                        .attackerPilotName
-                  "
-              />
-            </div>
+        <div class="versus-intro">
+          <p class="eyebrow">
+            Duel classé
+          </p>
 
-            <span class="versus-role">
-              Attaquant
-            </span>
+          <h2>
+            Face-à-face
+          </h2>
 
-            <strong>
-              {{
-                pendingDuel
-                    .attackerPilotName
-              }}
-            </strong>
-          </div>
-
-          <!-- VS -->
-
-          <div class="versus-symbol">
-            VS
-          </div>
-
-          <!-- DÉFENSEUR -->
-
-          <div class="versus-car">
-            <div
-                class="
-                  versus-car-visual
-                "
-            >
-              <CarVisual
-                  :color="
-                    pendingDuel
-                        .defenderColor
-                  "
-                  :body-style="
-                    pendingDuel
-                        .defenderBodyStyle
-                  "
-                  :wheel-style="
-                    pendingDuel
-                        .defenderWheelStyle
-                  "
-                  :pilot-name="
-                    pendingDuel
-                        .defenderPilotName
-                  "
-              />
-            </div>
-
-            <span class="versus-role">
-              Défenseur
-            </span>
-
-            <strong>
-              {{
-                pendingDuel
-                    .defenderPilotName
-              }}
-            </strong>
-          </div>
+          <p>
+            Deux pilotes. Une seule ligne d'arrivée.
+          </p>
         </div>
 
-        <p class="duel-difficulty">
-          Difficulté :
+        <!-- =====================================
+             VERSUS
+        ====================================== -->
+
+        <div class="versus-arena">
+          <!-- =================================
+               ATTAQUANT
+          ================================== -->
+
+          <article
+              class="
+          versus-driver
+          versus-driver-attacker
+        "
+          >
+            <div class="driver-heading">
+        <span class="driver-role">
+          Attaquant
+        </span>
+
+              <strong>
+                {{
+                  pendingDuel
+                      .attackerPilotName
+                }}
+              </strong>
+            </div>
+
+            <div
+                class="
+            versus-car-stage
+            attacker-car-stage
+          "
+            >
+              <div class="versus-car-shadow" />
+
+              <div class="versus-car-entry">
+                <CarVisual
+                    :color="
+                pendingDuel
+                    .attackerColor
+              "
+                    :body-style="
+                pendingDuel
+                    .attackerBodyStyle
+              "
+                    :wheel-style="
+                pendingDuel
+                    .attackerWheelStyle
+              "
+                    :pilot-name="
+                pendingDuel
+                    .attackerPilotName
+              "
+                />
+              </div>
+            </div>
+          </article>
+
+          <!-- =================================
+               VS
+          ================================== -->
+
+          <div class="versus-center">
+            <span class="versus-line" />
+
+            <div class="versus-badge">
+              VS
+            </div>
+
+            <span class="versus-line" />
+          </div>
+
+          <!-- =================================
+               DÉFENSEUR
+          ================================== -->
+
+          <article
+              class="
+          versus-driver
+          versus-driver-defender
+        "
+          >
+            <div class="driver-heading">
+        <span class="driver-role">
+          Défenseur
+        </span>
+
+              <strong>
+                {{
+                  pendingDuel
+                      .defenderPilotName
+                }}
+              </strong>
+            </div>
+
+            <div
+                class="
+            versus-car-stage
+            defender-car-stage
+          "
+            >
+              <div class="versus-car-shadow" />
+
+              <div
+                  class="
+              versus-car-entry
+              defender-car-visual
+            "
+              >
+                <CarVisual
+                    :color="
+                pendingDuel
+                    .defenderColor
+              "
+                    :body-style="
+                pendingDuel
+                    .defenderBodyStyle
+              "
+                    :wheel-style="
+                pendingDuel
+                    .defenderWheelStyle
+              "
+                    :pilot-name="
+                pendingDuel
+                    .defenderPilotName
+              "
+                />
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <!-- =====================================
+             DIFFICULTÉ
+        ====================================== -->
+
+        <div class="duel-briefing">
+    <span>
+      Difficulté estimée
+    </span>
 
           <strong>
             {{
               pendingDuel.difficulty
             }}
           </strong>
-        </p>
+        </div>
+
+        <!-- =====================================
+             ERREUR / COOLDOWN
+        ====================================== -->
 
         <p
             v-if="
-              duelStore.errorMessage
-              !== ''
-            "
+        duelStore.errorMessage
+        !== ''
+      "
             class="
-              alert
-              alert-error
-            "
+        alert
+        alert-error
+        versus-error
+      "
         >
           {{ duelStore.errorMessage }}
 
           <span
               v-if="
-                duelStore.retryAfterSeconds
-                !== null
-                && duelStore.retryAfterSeconds
-                > 0
-              "
+          duelStore.retryAfterSeconds
+          !== null
+          && duelStore.retryAfterSeconds
+          > 0
+        "
           >
-            Nouvelle tentative possible dans
-            {{ duelStore.retryAfterSeconds }}
-            seconde(s).
-          </span>
+      Nouvelle tentative possible dans
+
+      <strong>
+        {{
+          duelStore
+              .retryAfterSeconds
+        }}
+      </strong>
+
+      seconde(s).
+    </span>
         </p>
 
-        <button
-            type="button"
-            class="
-              button
-              button-primary
-              button-full
-            "
-            :disabled="
-              duelStore.loading
-              || (
-                duelStore.retryAfterSeconds
-                !== null
-                && duelStore.retryAfterSeconds
-                > 0
-              )
-            "
-            @click="
-              startDuel
-            "
-        >
-          {{
+        <!-- =====================================
+             ACTION
+        ====================================== -->
+
+        <div class="versus-action">
+          <p>
+            Prêt pour la course ?
+          </p>
+
+          <button
+              type="button"
+              class="
+          button
+          button-primary
+          launch-duel-button
+        "
+              :disabled="
+          duelStore.loading
+          || (
+            duelStore.retryAfterSeconds
+            !== null
+            && duelStore.retryAfterSeconds
+            > 0
+          )
+        "
+              @click="
+          startDuel
+        "
+          >
+            <template
+                v-if="
             duelStore.loading
-                ? 'Simulation en cours...'
-                : 'Lancer le duel'
-          }}
-        </button>
+          "
+            >
+        <span class="launch-spinner">
+          ↻
+        </span>
+
+              Préparation de la course...
+            </template>
+
+            <template v-else>
+              Lancer le duel
+
+              <span class="launch-arrow">
+          →
+        </span>
+            </template>
+          </button>
+
+          <button
+              type="button"
+              class="
+          change-opponent-button
+        "
+              :disabled="
+          duelStore.loading
+        "
+              @click="
+          backToDuels
+        "
+          >
+            Choisir un autre adversaire
+          </button>
+        </div>
       </section>
 
       <!-- =====================================
-           REPLAY
+           DUEL EXISTANT
       ====================================== -->
 
       <template v-else>
+        <!-- =====================================
+             COURSE
+
+             Après la fin :
+             cachée si le journal est demandé.
+        ====================================== -->
+
         <section
+            v-if="
+              !replayFinished
+              || !showCombatLog
+            "
             class="
               panel
               race-replay
+              replay-view
             "
         >
           <div class="section-heading">
@@ -1093,6 +1336,12 @@ onBeforeUnmount(
               </h2>
             </div>
 
+            <!--
+              Après la course, le bouton
+              "Revoir" se trouve dans la fenêtre
+              de progression.
+            -->
+
             <button
                 v-if="
                   !replayFinished
@@ -1107,20 +1356,6 @@ onBeforeUnmount(
                 "
             >
               Passer le replay
-            </button>
-
-            <button
-                v-else
-                type="button"
-                class="
-                  button
-                  button-secondary
-                "
-                @click="
-                  replayAgain
-                "
-            >
-              Revoir la course
             </button>
           </div>
 
@@ -1139,8 +1374,6 @@ onBeforeUnmount(
                   replayFinished,
               }"
           >
-            <!-- ROUTE -->
-
             <div class="road-background">
               <div
                   class="
@@ -1162,8 +1395,6 @@ onBeforeUnmount(
                   "
               />
 
-              <!-- ARRIVÉE -->
-
               <div
                   v-if="
                     finishVisible
@@ -1176,9 +1407,7 @@ onBeforeUnmount(
               </div>
             </div>
 
-            <!-- =================================
-                 ATTAQUANT
-            ================================== -->
+            <!-- ATTAQUANT -->
 
             <div
                 class="
@@ -1248,9 +1477,7 @@ onBeforeUnmount(
               </div>
             </div>
 
-            <!-- =================================
-                 DÉFENSEUR
-            ================================== -->
+            <!-- DÉFENSEUR -->
 
             <div
                 class="
@@ -1320,10 +1547,6 @@ onBeforeUnmount(
               </div>
             </div>
 
-            <!-- =================================
-                 PROGRESSION
-            ================================== -->
-
             <div class="race-progress">
               <span
                   :style="{
@@ -1334,7 +1557,7 @@ onBeforeUnmount(
             </div>
           </div>
 
-          <!-- ÉTAT DE COURSE -->
+          <!-- ÉTAT COURSE -->
 
           <div
               class="
@@ -1343,6 +1566,7 @@ onBeforeUnmount(
           >
             <span>
               Progression :
+
               <strong>
                 {{ progressPercent }} %
               </strong>
@@ -1350,6 +1574,7 @@ onBeforeUnmount(
 
             <span>
               Écart :
+
               <strong>
                 {{
                   currentGap > 0
@@ -1365,6 +1590,7 @@ onBeforeUnmount(
                 "
             >
               Section :
+
               <strong>
                 {{
                   currentEvent.label
@@ -1375,34 +1601,82 @@ onBeforeUnmount(
         </section>
 
         <!-- =====================================
-             TERMINAL NARRATIF
+             JOURNAL DE COMBAT
+
+             Pendant le replay :
+             toujours visible.
+
+             Après le replay :
+             visible uniquement sur demande.
         ====================================== -->
 
-        <DuelNarrativeTerminal
-            :events="
-              visibleEvents
+        <div
+            v-if="
+              !replayFinished
+              || showCombatLog
             "
-            :attacker-name="
-              duelStore.duel
-                  .attackerSnapshot
-                  .pilotName
+            class="
+              combat-log-view
             "
-            :defender-name="
-              duelStore.duel
-                  .defenderSnapshot
-                  .pilotName
-            "
-            :replay-finished="
-              replayFinished
-            "
-            :winner-name="
-              winnerName
-            "
-            :final-gap="
-              duelStore.duel
-                  .finalGap
-            "
-        />
+        >
+          <div
+              v-if="
+                replayFinished
+              "
+              class="
+                combat-log-heading
+              "
+          >
+            <div>
+              <p class="eyebrow">
+                Replay
+              </p>
+
+              <h2>
+                Journal de combat
+              </h2>
+            </div>
+
+            <button
+                type="button"
+                class="
+                  button
+                  button-secondary
+                "
+                @click="
+                  toggleCombatLog
+                "
+            >
+              Voir la course
+            </button>
+          </div>
+
+          <DuelNarrativeTerminal
+              :events="
+                visibleEvents
+              "
+              :attacker-name="
+                duelStore.duel
+                    .attackerSnapshot
+                    .pilotName
+              "
+              :defender-name="
+                duelStore.duel
+                    .defenderSnapshot
+                    .pilotName
+              "
+              :replay-finished="
+                replayFinished
+              "
+              :winner-name="
+                winnerName
+              "
+              :final-gap="
+                duelStore.duel
+                    .finalGap
+              "
+          />
+        </div>
 
         <!-- =====================================
              RÉSULTAT
@@ -1413,41 +1687,59 @@ onBeforeUnmount(
               replayFinished
             "
             class="
-              panel
               duel-result
             "
+            :class="{
+              'duel-result-victory':
+                attackerWon,
+
+              'duel-result-defeat':
+                !attackerWon,
+            }"
         >
-          <p class="eyebrow">
-            Résultat officiel
-          </p>
+          <div class="result-hero">
+            <p class="eyebrow">
+              Résultat officiel
+            </p>
 
-          <h2>
-            Victoire de
-            {{ winnerName }}
-          </h2>
-
-          <p>
-            Écart final :
-
-            <strong>
+            <div class="result-status">
               {{
-                duelStore.duel
-                    .finalGap > 0
-                    ? '+'
-                    : ''
+                attackerWon
+                    ? 'VICTOIRE'
+                    : 'DÉFAITE'
               }}
+            </div>
 
+            <h2>
               {{
-                duelStore.duel
-                    .finalGap
+                attackerWon
+                    ? `${duelStore.duel.attackerSnapshot.pilotName} remporte le duel`
+                    : `${duelStore.duel.defenderSnapshot.pilotName} remporte le duel`
               }}
-            </strong>
-          </p>
+            </h2>
 
-          <div class="result-grid">
-            <div>
+            <p class="result-gap">
+              Écart final
+
+              <strong>
+                {{
+                  duelStore.duel.finalGap
+                  > 0
+                      ? '+'
+                      : ''
+                }}{{
+                  duelStore.duel.finalGap
+                }}
+              </strong>
+            </p>
+          </div>
+
+          <!-- RÉCOMPENSES -->
+
+          <div class="result-rewards">
+            <article>
               <span>
-                Récompense XP
+                XP
               </span>
 
               <strong>
@@ -1456,11 +1748,15 @@ onBeforeUnmount(
                       .attackerXpReward
                 }}
               </strong>
-            </div>
 
-            <div>
+              <small>
+                expérience
+              </small>
+            </article>
+
+            <article>
               <span>
-                Argent gagné
+                $
               </span>
 
               <strong>
@@ -1468,13 +1764,16 @@ onBeforeUnmount(
                   duelStore.duel
                       .attackerMoneyReward
                 }}
-                $
               </strong>
-            </div>
 
-            <div>
+              <small>
+                argent
+              </small>
+            </article>
+
+            <article>
               <span>
-                Évolution Elo
+                ELO
               </span>
 
               <strong>
@@ -1496,33 +1795,35 @@ onBeforeUnmount(
                       .attackerRatingAfter
                 }}
               </small>
-            </div>
+            </article>
+          </div>
 
-            <div>
-              <span>
-                Duels de la paire
-              </span>
+          <!-- ANTI FARMING -->
 
-              <strong>
-                {{
-                  duelStore.duel
-                      .replayData
-                      .antiFarming
-                      ?.pairDuelNumber
-                  ?? 1
-                }}
+          <div class="pair-duels">
+            <span>
+              Duels contre cet adversaire aujourd'hui
+            </span>
 
-                /
+            <strong>
+              {{
+                duelStore.duel
+                    .replayData
+                    .antiFarming
+                    ?.pairDuelNumber
+                ?? 1
+              }}
 
-                {{
-                  duelStore.duel
-                      .replayData
-                      .antiFarming
-                      ?.pairDailyLimit
-                  ?? 3
-                }}
-              </strong>
-            </div>
+              /
+
+              {{
+                duelStore.duel
+                    .replayData
+                    .antiFarming
+                    ?.pairDailyLimit
+                ?? 3
+              }}
+            </strong>
           </div>
 
           <p
@@ -1532,6 +1833,7 @@ onBeforeUnmount(
                     .rewards
                     ?.multiplier
                 !== undefined
+
                 && duelStore.duel
                     .replayData
                     .rewards
@@ -1541,10 +1843,11 @@ onBeforeUnmount(
               class="
                 alert
                 alert-warning
+                reward-warning
               "
           >
-            Les récompenses ont été réduites en raison
-            d’affrontements répétés contre cet adversaire.
+            Les récompenses sont réduites car cet
+            adversaire a déjà été affronté plusieurs fois.
           </p>
         </section>
 
@@ -1594,7 +1897,7 @@ onBeforeUnmount(
         />
 
         <!-- =====================================
-             RETOUR GARAGE
+             PROGRESSION / ACTIONS
         ====================================== -->
 
         <section
@@ -1602,46 +1905,126 @@ onBeforeUnmount(
               replayFinished
               && !loadingChoice
             "
-            class="duel-actions"
+            class="
+              duel-actions
+              duel-end-actions
+            "
         >
-          <p
+          <!-- PROGRESSION -->
+
+          <div
               v-if="
                 updatedCar !== null
               "
-          >
-            {{
-              updatedCar.pilotName
-            }}
-            est niveau
-
-            {{
-              updatedCar.level
-            }},
-            avec
-
-            {{
-              updatedCar.xp
-            }}
-            XP et
-
-            {{
-              updatedCar.money
-            }}
-            $.
-          </p>
-
-          <button
-              type="button"
               class="
-                button
-                button-primary
-              "
-              @click="
-                backToDuels
+                updated-car-summary
               "
           >
-            Retourner aux Duels
-          </button>
+            <div>
+              <p class="eyebrow">
+                Progression
+              </p>
+
+              <strong>
+                {{
+                  updatedCar.pilotName
+                }}
+              </strong>
+            </div>
+
+            <div class="updated-car-values">
+              <span>
+                NIV.
+
+                <strong>
+                  {{
+                    updatedCar.level
+                  }}
+                </strong>
+              </span>
+
+              <span>
+                XP
+
+                <strong>
+                  {{
+                    updatedCar.xp
+                  }}
+                </strong>
+              </span>
+
+              <span>
+                $
+
+                <strong>
+                  {{
+                    updatedCar.money
+                  }}
+                </strong>
+              </span>
+            </div>
+          </div>
+
+          <!-- ACTIONS -->
+
+          <div class="duel-end-buttons">
+            <button
+                type="button"
+                class="
+                  button
+                  button-primary
+                  new-duel-button
+                "
+                @click="
+                  backToDuels
+                "
+            >
+              Nouveau duel
+            </button>
+
+            <button
+                type="button"
+                class="
+                  button
+                  button-secondary
+                "
+                @click="
+                  replayAgain
+                "
+            >
+              Revoir la course
+            </button>
+
+            <button
+                type="button"
+                class="
+                  button
+                  button-secondary
+                  combat-log-button
+                "
+                @click="
+                  toggleCombatLog
+                "
+            >
+              {{
+                showCombatLog
+                    ? 'Voir la course'
+                    : 'Voir le journal de combat'
+              }}
+            </button>
+
+            <button
+                type="button"
+                class="
+                  garage-link-button
+                "
+                @click="
+                  backToGarage
+                "
+            >
+              Retour au garage
+            </button>
+          </div>
         </section>
       </template>
     </template>
@@ -1651,69 +2034,842 @@ onBeforeUnmount(
 <style scoped>
 /*
  * =====================================
- * PRÉ-DUEL
+ * ÉCRAN VS
  * =====================================
  */
 
-.versus-grid {
+.versus-screen {
+  position: relative;
+
+  overflow: hidden;
+
+  padding:
+      26px
+      28px
+      22px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.09
+      );
+
+  border-radius: 24px;
+
+  background:
+      radial-gradient(
+          circle at 22% 43%,
+          rgba(
+              90,
+              130,
+              220,
+              0.11
+          ),
+          transparent 35%
+      ),
+      radial-gradient(
+          circle at 78% 43%,
+          rgba(
+              220,
+              80,
+              90,
+              0.1
+          ),
+          transparent 35%
+      ),
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+}
+
+.versus-screen::before {
+  content: '';
+
+  position: absolute;
+
+  top: -50%;
+  left: 50%;
+
+  width: 1px;
+  height: 200%;
+
+  background:
+      linear-gradient(
+          transparent,
+          rgba(
+              255,
+              255,
+              255,
+              0.12
+          ),
+          transparent
+      );
+
+  transform:
+      rotate(14deg);
+
+  pointer-events: none;
+}
+
+/*
+ * =====================================
+ * INTRO
+ * =====================================
+ */
+
+.versus-intro {
+  position: relative;
+
+  z-index: 4;
+
+  text-align: center;
+}
+
+.versus-intro h2 {
+  margin:
+      0
+      0
+      4px;
+
+  font-size:
+      clamp(
+          1.6rem,
+          5vw,
+          2.5rem
+      );
+
+  letter-spacing: -0.035em;
+}
+
+.versus-intro > p:last-child {
+  margin: 0;
+
+  font-size: 0.72rem;
+
+  opacity: 0.42;
+}
+
+/*
+ * =====================================
+ * ARENA
+ * =====================================
+ */
+
+.versus-arena {
+  position: relative;
+
+  z-index: 3;
+
   display: grid;
 
   grid-template-columns:
-      minmax(0, 1fr)
-      auto
-      minmax(0, 1fr);
-
-  gap: 24px;
+      minmax(
+          0,
+          1fr
+      )
+      85px
+      minmax(
+          0,
+          1fr
+      );
 
   align-items: center;
+
+  gap: 10px;
+
+  margin:
+      10px
+      0
+      0;
 }
 
-.versus-car {
+/*
+ * =====================================
+ * PILOTES
+ * =====================================
+ */
+
+.versus-driver {
   min-width: 0;
+}
+
+.driver-heading {
+  position: relative;
+
+  z-index: 3;
 
   display: grid;
 
   justify-items: center;
 
-  gap: 3px;
+  gap: 2px;
 
   text-align: center;
 }
 
-.versus-car-visual {
+.driver-role {
+  font-size: 0.58rem;
+  font-weight: 850;
+
+  letter-spacing: 0.12em;
+
+  text-transform: uppercase;
+
+  opacity: 0.38;
+}
+
+.driver-heading strong {
+  max-width: 100%;
+
+  overflow: hidden;
+
+  font-size:
+      clamp(
+          1.15rem,
+          3vw,
+          1.7rem
+      );
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+/*
+ * =====================================
+ * STAGE DES VOITURES
+ * =====================================
+ */
+
+.versus-car-stage {
+  position: relative;
+
   width: 100%;
-  max-width: 360px;
+  max-width: 430px;
+
+  margin:
+      -5px
+      auto
+      -4px;
+}
+
+.versus-car-shadow {
+  position: absolute;
+
+  left: 18%;
+  right: 18%;
+  bottom: 17%;
+
+  height: 13px;
+
+  border-radius: 50%;
+
+  background:
+      rgba(
+          0,
+          0,
+          0,
+          0.4
+      );
+
+  filter:
+      blur(9px);
+}
+
+/*
+ * Voiture gauche.
+ */
+.versus-driver-attacker
+.versus-car-entry {
+  animation:
+      versus-attacker-enter
+      500ms
+      cubic-bezier(
+          0.2,
+          0.8,
+          0.3,
+          1
+      )
+      both;
+}
+
+/*
+ * La voiture droite est inversée afin
+ * que les deux véhicules se regardent.
+ */
+.defender-car-visual {
+  transform:
+      scaleX(-1);
+}
+
+.versus-driver-defender
+.versus-car-entry {
+  animation:
+      versus-defender-enter
+      500ms
+      70ms
+      cubic-bezier(
+          0.2,
+          0.8,
+          0.3,
+          1
+      )
+      both;
+}
+
+/*
+ * =====================================
+ * VS
+ * =====================================
+ */
+
+.versus-center {
+  display: grid;
+
+  justify-items: center;
+
+  gap: 8px;
+}
+
+.versus-line {
+  display: block;
+
+  width: 1px;
+  height: 40px;
+
+  background:
+      linear-gradient(
+          transparent,
+          rgba(
+              255,
+              255,
+              255,
+              0.18
+          )
+      );
+}
+
+.versus-line:last-child {
+  background:
+      linear-gradient(
+          rgba(
+              255,
+              255,
+              255,
+              0.18
+          ),
+          transparent
+      );
+}
+
+.versus-badge {
+  display: flex;
+
+  width: 58px;
+  height: 58px;
+
+  align-items: center;
+  justify-content: center;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.16
+      );
+
+  border-radius: 50%;
+
+  background:
+      rgba(
+          17,
+          19,
+          23,
+          0.94
+      );
+
+  box-shadow:
+      0
+      0
+      0
+      6px
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      ),
+      0
+      10px
+      32px
+      rgba(
+          0,
+          0,
+          0,
+          0.4
+      );
+
+  font-size: 1.05rem;
+  font-weight: 950;
+
+  animation:
+      versus-badge-enter
+      450ms
+      120ms
+      ease
+      both;
+}
+
+/*
+ * =====================================
+ * BRIEFING
+ * =====================================
+ */
+
+.duel-briefing {
+  position: relative;
+
+  z-index: 5;
+
+  display: flex;
+
+  width: fit-content;
+
+  align-items: center;
+
+  gap: 8px;
+
+  margin:
+      -2px
+      auto
+      16px;
+
+  padding:
+      7px
+      10px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.08
+      );
+
+  border-radius: 999px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.035
+      );
+}
+
+.duel-briefing span {
+  font-size: 0.6rem;
+
+  opacity: 0.4;
+}
+
+.duel-briefing strong {
+  font-size: 0.68rem;
+
+  text-transform: capitalize;
+}
+
+/*
+ * =====================================
+ * ACTION
+ * =====================================
+ */
+
+.versus-action {
+  position: relative;
+
+  z-index: 5;
+
+  display: grid;
+
+  max-width: 520px;
+
+  gap: 7px;
+
+  margin:
+      0
+      auto;
+}
+
+.versus-action > p {
+  margin:
+      0
+      0
+      3px;
+
+  text-align: center;
+
+  font-size: 0.68rem;
+
+  opacity: 0.4;
+}
+
+.launch-duel-button {
+  display: flex;
+
+  min-height: 50px;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 9px;
+
+  width: 100%;
+
+  font-size: 0.83rem;
+  font-weight: 900;
+
+  letter-spacing: 0.02em;
+}
+
+.launch-arrow {
+  font-size: 1rem;
+
+  transition:
+      transform
+      150ms
+      ease;
+}
+
+.launch-duel-button:hover
+.launch-arrow {
+  transform:
+      translateX(4px);
+}
+
+.launch-spinner {
+  display: inline-block;
+
+  animation:
+      versus-spinner
+      700ms
+      linear
+      infinite;
+}
+
+.change-opponent-button {
+  min-height: 34px;
+
+  border: 0;
+
+  background:
+      transparent;
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font-size: 0.65rem;
+
+  opacity: 0.4;
+}
+
+.change-opponent-button:hover {
+  opacity: 0.75;
+}
+
+.change-opponent-button:disabled {
+  cursor: default;
+
+  opacity: 0.2;
+}
+
+.versus-error {
+  position: relative;
+
+  z-index: 5;
+
+  max-width: 520px;
 
   margin:
       0
       auto
-      8px;
+      12px;
 }
 
-.versus-role {
-  font-size: 0.72rem;
+/*
+ * =====================================
+ * ANIMATIONS VS
+ * =====================================
+ */
 
-  text-transform: uppercase;
+@keyframes versus-attacker-enter {
+  from {
+    opacity: 0;
 
-  letter-spacing: 0.08em;
+    transform:
+        translateX(-55px);
+  }
 
-  opacity: 0.55;
+  to {
+    opacity: 1;
+
+    transform:
+        translateX(0);
+  }
 }
 
-.versus-car strong {
-  font-size: 1.15rem;
+@keyframes versus-defender-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateX(55px)
+        scaleX(-1);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateX(0)
+        scaleX(-1);
+  }
 }
 
-.versus-symbol {
-  font-size: 1.4rem;
+@keyframes versus-badge-enter {
+  from {
+    opacity: 0;
 
-  font-weight: 900;
+    transform:
+        scale(0.6)
+        rotate(-12deg);
+  }
 
-  opacity: 0.6;
+  to {
+    opacity: 1;
+
+    transform:
+        scale(1)
+        rotate(0);
+  }
 }
 
-.duel-difficulty {
+@keyframes versus-spinner {
+  to {
+    transform:
+        rotate(360deg);
+  }
+}
+
+/*
+ * =====================================
+ * VS MOBILE
+ * =====================================
+ */
+
+@media (
+max-width: 700px
+) {
+  .versus-screen {
+    padding:
+        20px
+        12px
+        16px;
+  }
+
+  .versus-arena {
+    grid-template-columns:
+        minmax(
+            0,
+            1fr
+        )
+        48px
+        minmax(
+            0,
+            1fr
+        );
+
+    gap: 2px;
+
+    margin-top: 14px;
+  }
+
+  .driver-role {
+    font-size: 0.48rem;
+  }
+
+  .driver-heading strong {
+    font-size: 0.95rem;
+  }
+
+  .versus-car-stage {
+    margin:
+        -2px
+        auto;
+  }
+
+  .versus-badge {
+    width: 42px;
+    height: 42px;
+
+    font-size: 0.78rem;
+  }
+
+  .versus-line {
+    height: 27px;
+  }
+
+  .duel-briefing {
+    margin-top: 4px;
+  }
+}
+
+@media (
+max-width: 420px
+) {
+  .versus-screen {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .versus-arena {
+    grid-template-columns:
+        minmax(
+            0,
+            1fr
+        )
+        38px
+        minmax(
+            0,
+            1fr
+        );
+  }
+
+  .versus-badge {
+    width: 34px;
+    height: 34px;
+
+    font-size: 0.67rem;
+  }
+
+  .versus-line {
+    height: 20px;
+  }
+
+  .driver-heading strong {
+    font-size: 0.82rem;
+  }
+}
+
+/*
+ * =====================================
+ * DUEL VIDE
+ * =====================================
+ */
+
+.duel-empty-state {
+  max-width: 520px;
+
+  margin:
+      70px
+      auto;
+
   text-align: center;
+}
+
+.empty-duel-symbol {
+  display: flex;
+
+  width: 72px;
+  height: 72px;
+
+  align-items: center;
+  justify-content: center;
+
+  margin:
+      0
+      auto
+      15px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.09
+      );
+
+  border-radius: 50%;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.04
+      );
+
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+/*
+ * =====================================
+ * TRANSITION COURSE / JOURNAL
+ * =====================================
+ */
+
+.replay-view,
+.combat-log-view {
+  animation:
+      duel-view-enter
+      180ms
+      ease;
+}
+
+.combat-log-heading {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin:
+      18px
+      0
+      10px;
+}
+
+.combat-log-heading h2 {
+  margin: 0;
+}
+
+@keyframes duel-view-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateY(0);
+  }
 }
 
 /*
@@ -1770,9 +2926,6 @@ onBeforeUnmount(
       );
 }
 
-/*
- * Texture mobile.
- */
 .road-background::before {
   content: '';
 
@@ -2086,11 +3239,6 @@ onBeforeUnmount(
  * =====================================
  */
 
-/*
- * DÉPART
- *
- * La voiture se tasse puis bondit.
- */
 .motion-start
 .race-car-visual {
   animation:
@@ -2099,11 +3247,6 @@ onBeforeUnmount(
       ease-out;
 }
 
-/*
- * LIGNE DROITE
- *
- * Petite vibration moteur.
- */
 .motion-straight
 .race-car-visual {
   animation:
@@ -2113,9 +3256,6 @@ onBeforeUnmount(
       infinite;
 }
 
-/*
- * VIRAGE
- */
 .motion-turn
 .race-car-visual {
   animation:
@@ -2124,9 +3264,6 @@ onBeforeUnmount(
       ease-in-out;
 }
 
-/*
- * CHICANE
- */
 .motion-chicane
 .race-car-visual {
   animation:
@@ -2135,9 +3272,6 @@ onBeforeUnmount(
       ease-in-out;
 }
 
-/*
- * SPRINT FINAL
- */
 .motion-sprint
 .race-car-visual {
   animation:
@@ -2147,9 +3281,6 @@ onBeforeUnmount(
       infinite;
 }
 
-/*
- * PHOTO-FINISH
- */
 .motion-finish
 .race-car-visual {
   animation:
@@ -2160,7 +3291,7 @@ onBeforeUnmount(
 
 /*
  * =====================================
- * PROGRESSION
+ * PROGRESSION DE COURSE
  * =====================================
  */
 
@@ -2228,6 +3359,395 @@ onBeforeUnmount(
 
 .current-race-status strong {
   opacity: 1;
+}
+
+/*
+ * =====================================
+ * RÉSULTAT
+ * =====================================
+ */
+
+.duel-result {
+  overflow: hidden;
+
+  margin-top: 18px;
+
+  padding: 22px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.09
+      );
+
+  border-radius: 20px;
+
+  background:
+      radial-gradient(
+          circle at 50% 0%,
+          rgba(
+              255,
+              255,
+              255,
+              0.075
+          ),
+          transparent 52%
+      ),
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+
+  text-align: center;
+
+  animation:
+      result-enter
+      350ms
+      ease;
+}
+
+.duel-result-victory {
+  border-color:
+      rgba(
+          70,
+          200,
+          120,
+          0.24
+      );
+}
+
+.duel-result-defeat {
+  border-color:
+      rgba(
+          225,
+          80,
+          90,
+          0.18
+      );
+}
+
+.result-hero {
+  padding:
+      8px
+      0
+      20px;
+}
+
+.result-status {
+  margin:
+      3px
+      0
+      4px;
+
+  font-size:
+      clamp(
+          2rem,
+          8vw,
+          3.4rem
+      );
+
+  font-weight: 950;
+
+  letter-spacing: -0.04em;
+}
+
+.duel-result-victory
+.result-status {
+  color:
+      rgba(
+          95,
+          220,
+          140,
+          1
+      );
+}
+
+.duel-result-defeat
+.result-status {
+  color:
+      rgba(
+          235,
+          100,
+          110,
+          1
+      );
+}
+
+.result-hero h2 {
+  margin:
+      0
+      0
+      8px;
+
+  font-size: 1rem;
+}
+
+.result-gap {
+  margin: 0;
+
+  font-size: 0.7rem;
+
+  opacity: 0.5;
+}
+
+.result-gap strong {
+  margin-left: 4px;
+}
+
+/*
+ * =====================================
+ * RÉCOMPENSES
+ * =====================================
+ */
+
+.result-rewards {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          3,
+          1fr
+      );
+
+  gap: 8px;
+}
+
+.result-rewards article {
+  display: grid;
+
+  justify-items: center;
+
+  padding:
+      12px
+      8px;
+
+  border-radius: 12px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.045
+      );
+}
+
+.result-rewards span {
+  font-size: 0.57rem;
+  font-weight: 800;
+
+  opacity: 0.4;
+}
+
+.result-rewards strong {
+  margin:
+      2px
+      0;
+
+  font-size: 1.15rem;
+}
+
+.result-rewards small {
+  font-size: 0.56rem;
+
+  opacity: 0.37;
+}
+
+/*
+ * =====================================
+ * ANTI FARMING
+ * =====================================
+ */
+
+.pair-duels {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  margin-top: 9px;
+
+  padding:
+      9px
+      11px;
+
+  border-radius: 10px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+
+  font-size: 0.65rem;
+}
+
+.pair-duels span {
+  opacity: 0.45;
+}
+
+.reward-warning {
+  margin:
+      9px
+      0
+      0;
+
+  text-align: left;
+}
+
+/*
+ * =====================================
+ * FIN DU DUEL
+ * =====================================
+ */
+
+.duel-end-actions {
+  display: grid;
+
+  gap: 10px;
+
+  margin-top: 12px;
+
+  padding: 14px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.08
+      );
+
+  border-radius: 16px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+}
+
+.updated-car-summary {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  padding:
+      5px
+      2px
+      12px;
+
+  border-bottom:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.06
+      );
+}
+
+.updated-car-summary strong {
+  font-size: 0.85rem;
+}
+
+.updated-car-values {
+  display: flex;
+
+  gap: 6px;
+}
+
+.updated-car-values span {
+  padding:
+      5px
+      7px;
+
+  border-radius: 7px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.045
+      );
+
+  font-size: 0.58rem;
+
+  opacity: 0.65;
+}
+
+/*
+ * Nouveau duel
+ * Revoir la course
+ * Journal
+ * Garage
+ */
+.duel-end-buttons {
+  display: grid;
+
+  grid-template-columns:
+      minmax(
+          0,
+          1.5fr
+      )
+      minmax(
+          0,
+          1fr
+      )
+      minmax(
+          0,
+          1.25fr
+      )
+      auto;
+
+  gap: 8px;
+}
+
+.new-duel-button {
+  font-weight: 850;
+}
+
+.combat-log-button {
+  white-space: nowrap;
+}
+
+.garage-link-button {
+  padding:
+      0
+      10px;
+
+  border: 0;
+
+  background:
+      transparent;
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font-size: 0.68rem;
+
+  opacity: 0.45;
+}
+
+.garage-link-button:hover {
+  opacity: 0.8;
 }
 
 /*
@@ -2401,6 +3921,24 @@ onBeforeUnmount(
   }
 }
 
+@keyframes result-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateY(10px)
+        scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateY(0)
+        scale(1);
+  }
+}
+
 /*
  * =====================================
  * RESPONSIVE
@@ -2408,10 +3946,34 @@ onBeforeUnmount(
  */
 
 @media (
+max-width: 900px
+) {
+  .duel-end-buttons {
+    grid-template-columns:
+        repeat(
+            3,
+            minmax(
+                0,
+                1fr
+            )
+        );
+  }
+
+  .garage-link-button {
+    grid-column:
+        1
+        / -1;
+
+    min-height: 32px;
+  }
+}
+
+@media (
 max-width: 700px
 ) {
   .versus-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns:
+        1fr;
   }
 
   .versus-symbol {
@@ -2443,9 +4005,9 @@ max-width: 700px
   }
 
   .race-car-name {
-    font-size: 0.58rem;
-
     margin-bottom: -8px;
+
+    font-size: 0.58rem;
   }
 
   .finish-line {
@@ -2454,6 +4016,77 @@ max-width: 700px
 
   .current-race-status {
     font-size: 0.7rem;
+  }
+
+  /*
+   * JOURNAL
+   */
+
+  .combat-log-heading {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+  .combat-log-heading
+  .button {
+    width: 100%;
+  }
+
+  /*
+   * RÉSULTAT
+   */
+
+  .duel-result {
+    padding:
+        16px
+        12px;
+  }
+
+  .result-rewards {
+    gap: 5px;
+  }
+
+  .result-rewards article {
+    padding:
+        10px
+        5px;
+  }
+
+  /*
+   * PROGRESSION
+   */
+
+  .updated-car-summary {
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+  .updated-car-values {
+    width: 100%;
+  }
+
+  .updated-car-values span {
+    flex: 1;
+
+    text-align: center;
+  }
+
+  .duel-end-buttons {
+    grid-template-columns:
+        1fr;
+  }
+
+  .duel-end-buttons
+  .button {
+    width: 100%;
+  }
+
+  .garage-link-button {
+    grid-column: auto;
+
+    min-height: 35px;
   }
 }
 

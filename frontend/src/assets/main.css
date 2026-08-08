@@ -811,7 +811,6 @@ input[type="color"] {
 .duel-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 24px;
     margin-top: 24px;
     padding: 20px;
