@@ -414,7 +414,6 @@ class Car
             new \DateTimeImmutable();
     }
 
-    #[Groups(['car:read'])]
     public function getXpRequiredForNextLevel(): int
     {
         return self::BASE_XP_REQUIRED
@@ -422,6 +421,12 @@ class Car
                 ($this->level - 1)
                 * self::XP_INCREASE_PER_LEVEL
             );
+    }
+
+    #[Groups(['car:read'])]
+    public function getXpRequired(): int
+    {
+        return $this->getXpRequiredForNextLevel();
     }
 
     #[Groups(['car:read'])]

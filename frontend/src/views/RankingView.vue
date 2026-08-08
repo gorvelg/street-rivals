@@ -6,6 +6,7 @@ import {
 } from 'vue'
 
 import {
+  useRoute,
   useRouter,
 } from 'vue-router'
 
@@ -32,15 +33,37 @@ type RankingTab =
     | 'ranking'
     | 'history'
 
+const route =
+    useRoute()
+
 const router =
     useRouter()
 
 const playerCarStore =
     usePlayerCarStore()
 
+/*
+ * =====================================
+ * ONGLET ACTIF
+ *
+ * /ranking
+ *     -> classement
+ *
+ * /ranking?tab=history
+ *     -> historique
+ *
+ * Cela permet notamment de revenir
+ * automatiquement sur l'historique
+ * après avoir regardé un replay.
+ * =====================================
+ */
+
 const activeTab =
     ref<RankingTab>(
-        'ranking',
+        route.query.tab
+        === 'history'
+            ? 'history'
+            : 'ranking',
     )
 
 const ranking =
@@ -86,6 +109,10 @@ async function loadData():
       ''
 
   try {
+    /*
+     * On restaure d'abord la voiture
+     * actuellement sélectionnée.
+     */
     if (
         !playerCarStore.initialized
     ) {
@@ -96,6 +123,12 @@ async function loadData():
     const carId =
         playerCarStore
             .selectedCarId
+
+    /*
+     * =====================================
+     * CLASSEMENT
+     * =====================================
+     */
 
     const rankingUrl =
         carId !== null
@@ -116,9 +149,14 @@ async function loadData():
         rankingResponse.current
 
     /*
-     * L'historique est propre
-     * à la voiture active.
+     * =====================================
+     * HISTORIQUE
+     *
+     * L'historique est propre à
+     * la voiture actuellement active.
+     * =====================================
      */
+
     if (
         carId === null
     ) {
@@ -165,6 +203,35 @@ async function backToDuels():
   await router.push({
     name: 'duels',
   })
+}
+
+/*
+ * Ouvre un ancien duel en mode
+ * replay historique / lecture seule.
+ */
+async function openHistoricalDuel(
+    duelId: number,
+): Promise<void> {
+  await router.push({
+    name: 'duel-history',
+
+    params: {
+      id: duelId,
+    },
+  })
+}
+
+/*
+ * =====================================
+ * ONGLETS
+ * =====================================
+ */
+
+function selectTab(
+    tab: RankingTab,
+): void {
+  activeTab.value =
+      tab
 }
 
 /*
@@ -254,6 +321,12 @@ function podiumLabel(
       return `#${rank}`
   }
 }
+
+/*
+ * =====================================
+ * CYCLE DE VIE
+ * =====================================
+ */
 
 onMounted(
     async () => {
@@ -420,8 +493,9 @@ onMounted(
               === 'ranking',
           }"
           @click="
-            activeTab =
-              'ranking'
+            selectTab(
+                'ranking',
+            )
           "
       >
         Classement
@@ -435,8 +509,9 @@ onMounted(
               === 'history',
           }"
           @click="
-            activeTab =
-              'history'
+            selectTab(
+                'history',
+            )
           "
       >
         Mes duels
@@ -581,7 +656,14 @@ onMounted(
             empty-state
           "
       >
-        Aucun pilote classé.
+        <h2>
+          Aucun pilote classé
+        </h2>
+
+        <p>
+          Le classement apparaîtra ici
+          dès que des voitures seront disponibles.
+        </p>
       </div>
     </section>
 
@@ -595,13 +677,14 @@ onMounted(
           duel-history
         "
     >
-      <article
+      <button
           v-for="
             duel in history
           "
           :key="
             duel.duelId
           "
+          type="button"
           class="
             history-entry
           "
@@ -612,8 +695,15 @@ onMounted(
             'history-defeat':
               !duel.won,
           }"
+          @click="
+            openHistoricalDuel(
+                duel.duelId,
+            )
+          "
       >
-        <!-- RESULTAT -->
+        <!-- =================================
+             RESULTAT
+        ================================== -->
 
         <div class="history-result">
           <span>
@@ -633,7 +723,9 @@ onMounted(
           </small>
         </div>
 
-        <!-- OPPOSANT -->
+        <!-- =================================
+             ADVERSAIRE
+        ================================== -->
 
         <div class="history-main">
           <div class="history-car">
@@ -679,7 +771,9 @@ onMounted(
           </div>
         </div>
 
-        <!-- GAINS -->
+        <!-- =================================
+             GAINS
+        ================================== -->
 
         <div class="history-rewards">
           <div>
@@ -716,7 +810,25 @@ onMounted(
             </strong>
           </div>
         </div>
-      </article>
+
+        <!-- =================================
+             REPLAY
+        ================================== -->
+
+        <div class="history-replay-cta">
+          <span>
+            Revoir
+          </span>
+
+          <strong>
+            →
+          </strong>
+        </div>
+      </button>
+
+      <!-- =================================
+           HISTORIQUE VIDE
+      ================================== -->
 
       <div
           v-if="
@@ -741,6 +853,12 @@ onMounted(
 </template>
 
 <style scoped>
+/*
+ * =====================================
+ * PAGE
+ * =====================================
+ */
+
 .ranking-page {
   display: grid;
 
@@ -925,6 +1043,24 @@ onMounted(
 
   font-size: 0.72rem;
   font-weight: 800;
+
+  transition:
+      background
+      150ms
+      ease,
+      opacity
+      150ms
+      ease;
+}
+
+.ranking-tabs button:hover {
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.05
+      );
 }
 
 .ranking-tabs button.active {
@@ -1085,6 +1221,11 @@ onMounted(
   gap: 8px;
 }
 
+/*
+ * Toute la ligne est maintenant
+ * un bouton permettant d'ouvrir
+ * le replay historique.
+ */
 .history-entry {
   display: grid;
 
@@ -1094,7 +1235,10 @@ onMounted(
           0,
           1fr
       )
-      auto;
+      auto
+      58px;
+
+  width: 100%;
 
   align-items: center;
 
@@ -1121,7 +1265,82 @@ onMounted(
           255,
           0.022
       );
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font: inherit;
+
+  text-align: left;
+
+  appearance: none;
+
+  transition:
+      transform
+      140ms
+      ease,
+      border-color
+      140ms
+      ease,
+      background
+      140ms
+      ease,
+      box-shadow
+      140ms
+      ease;
 }
+
+.history-entry:hover {
+  transform:
+      translateY(-2px);
+
+  border-color:
+      rgba(
+          255,
+          255,
+          255,
+          0.16
+      );
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.04
+      );
+
+  box-shadow:
+      0
+      10px
+      28px
+      rgba(
+          0,
+          0,
+          0,
+          0.16
+      );
+}
+
+.history-entry:focus-visible {
+  outline:
+      2px solid
+      rgba(
+          100,
+          150,
+          245,
+          0.7
+      );
+
+  outline-offset: 2px;
+}
+
+/*
+ * =====================================
+ * VICTOIRE / DÉFAITE
+ * =====================================
+ */
 
 .history-victory {
   border-left:
@@ -1133,15 +1352,18 @@ onMounted(
           0.75
       );
 }
-.history-victory .history-result > span {
+
+.history-victory
+.history-result > span {
   color:
       rgba(
           75,
           205,
           125,
-          0.75
+          0.9
       );
 }
+
 .history-defeat {
   border-left:
       3px solid
@@ -1153,14 +1375,22 @@ onMounted(
       );
 }
 
-.history-defeat .history-result > span {
-  color: rgba(
-      225,
-      85,
-      95,
-      0.7
-  );
+.history-defeat
+.history-result > span {
+  color:
+      rgba(
+          225,
+          85,
+          95,
+          0.9
+      );
 }
+
+/*
+ * =====================================
+ * RESULTAT
+ * =====================================
+ */
 
 .history-result {
   display: grid;
@@ -1178,6 +1408,12 @@ onMounted(
 
   opacity: 0.4;
 }
+
+/*
+ * =====================================
+ * ADVERSAIRE
+ * =====================================
+ */
 
 .history-main {
   display: flex;
@@ -1213,6 +1449,12 @@ onMounted(
 
   white-space: nowrap;
 }
+
+/*
+ * =====================================
+ * RECOMPENSES
+ * =====================================
+ */
 
 .history-rewards {
   display: grid;
@@ -1257,6 +1499,51 @@ onMounted(
   font-size: 0.67rem;
 }
 
+/*
+ * =====================================
+ * CTA REPLAY
+ * =====================================
+ */
+
+.history-replay-cta {
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 5px;
+
+  font-size: 0.6rem;
+
+  opacity: 0.4;
+
+  transition:
+      opacity
+      140ms
+      ease,
+      transform
+      140ms
+      ease;
+}
+
+.history-replay-cta strong {
+  font-size: 0.85rem;
+}
+
+.history-entry:hover
+.history-replay-cta {
+  opacity: 0.9;
+
+  transform:
+      translateX(2px);
+}
+
+/*
+ * =====================================
+ * LOADING
+ * =====================================
+ */
+
 .ranking-loading {
   padding: 30px;
 
@@ -1267,13 +1554,17 @@ onMounted(
 
 /*
  * =====================================
- * MOBILE
+ * TABLETTE / MOBILE
  * =====================================
  */
 
 @media (
 max-width: 700px
 ) {
+  /*
+   * Position actuelle
+   */
+
   .current-ranking {
     grid-template-columns:
         1fr;
@@ -1295,6 +1586,10 @@ max-width: 700px
         -15px
         auto;
   }
+
+  /*
+   * Classement
+   */
 
   .ranking-entry {
     grid-template-columns:
@@ -1318,6 +1613,10 @@ max-width: 700px
     display: none;
   }
 
+  /*
+   * Historique
+   */
+
   .history-entry {
     grid-template-columns:
         1fr;
@@ -1330,6 +1629,10 @@ max-width: 700px
 
     align-items: center;
     justify-content: space-between;
+  }
+
+  .history-main {
+    min-height: 75px;
   }
 
   .history-car {
@@ -1347,7 +1650,19 @@ max-width: 700px
   .history-rewards > div {
     min-width: 0;
   }
+
+  .history-replay-cta {
+    justify-content: flex-end;
+
+    padding-top: 4px;
+  }
 }
+
+/*
+ * =====================================
+ * PETITS MOBILES
+ * =====================================
+ */
 
 @media (
 max-width: 430px
@@ -1356,7 +1671,8 @@ max-width: 430px
     width: 100%;
   }
 
-  .heading-actions .button {
+  .heading-actions
+  .button {
     flex: 1;
   }
 
@@ -1381,6 +1697,14 @@ max-width: 430px
 
   .ranking-driver span {
     font-size: 0.55rem;
+  }
+
+  .history-entry {
+    padding: 9px;
+  }
+
+  .history-car {
+    width: 82px;
   }
 }
 </style>

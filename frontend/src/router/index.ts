@@ -65,6 +65,7 @@ import AdminCardDetailView from '../views/admin/AdminCardDetailView.vue'
 import AdminEventsView from '../views/admin/AdminEventsView.vue'
 import AdminGameSettingsView from '../views/admin/AdminGameSettingsView.vue'
 import RankingView from "../views/RankingView.vue"
+import HistoricalDuelView from "../views/HistoricalDuelView.vue";
 
 const routes:
     RouteRecordRaw[] = [
@@ -162,6 +163,21 @@ const routes:
 
         component:
         DuelView,
+
+        meta: {
+            requiresAuth: true,
+            immersive: true,
+        },
+    },
+    {
+        path:
+            '/duel-history/:id',
+
+        name:
+            'duel-history',
+
+        component:
+        HistoricalDuelView,
 
         meta: {
             requiresAuth: true,

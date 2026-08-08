@@ -36,6 +36,7 @@ import type {
   EquipmentSlot,
   EquipCarCardResponse,
 } from '../types/api'
+import XpProgressBar from "../components/XpProgressBar.vue";
 
 /*
  * =====================================
@@ -1472,7 +1473,16 @@ onMounted(
           }}
         </button>
       </nav>
-
+      <section>
+        <XpProgressBar
+            :current-xp="
+      selectedCar.xp
+    "
+            :required-xp="
+      selectedCar.xpRequired
+    "
+        />
+      </section>
       <!-- =================================
            APERÇU
       ================================== -->

@@ -30,6 +30,7 @@ export interface Car {
     solidity: number
     level: number
     xp: number
+    xpRequired: number
     rating?: number
     wins?: number
     losses?: number
@@ -922,4 +923,59 @@ export interface DuelHistoryItem {
 export interface DuelHistoryResponse {
     items:
         DuelHistoryItem[]
+}
+/*
+ * =====================================
+ * REPLAY HISTORIQUE
+ * =====================================
+ */
+
+export interface HistoricalDuelRewards {
+    xp: number
+    money: number
+}
+
+export interface HistoricalDuelRating {
+    before: number
+    after: number
+    delta: number
+}
+
+export interface HistoricalDuelReplay {
+    id: number
+
+    createdAt: string
+
+    engineVersion: string
+
+    finalGap: number
+
+    winnerCarId:
+        number
+        | null
+
+    viewerSide:
+        'attacker'
+        | 'defender'
+
+    viewerWon: boolean
+
+    viewerCarId:
+        number
+        | null
+
+    attackerSnapshot:
+        Duel['attackerSnapshot']
+
+    defenderSnapshot:
+        Duel['defenderSnapshot']
+
+    replayData:
+        Duel['replayData']
+
+    viewerRewards:
+        HistoricalDuelRewards
+
+    viewerRating:
+        HistoricalDuelRating
 }

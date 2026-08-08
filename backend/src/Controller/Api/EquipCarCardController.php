@@ -52,12 +52,7 @@ final class EquipCarCardController
             );
         }
 
-        /*
-         * On refuse volontairement de distinguer
-         * "voiture inexistante" et
-         * "voiture appartenant à quelqu'un d'autre"
-         * au niveau fonctionnel.
-         */
+
         if (
             $car->getUser()?->getId()
             !== $user->getId()
