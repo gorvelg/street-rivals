@@ -786,7 +786,7 @@ async function refreshAttackerCar():
  * =====================================
  */
 
-async function backToGarage():
+async function backToDuels():
     Promise<void> {
   stopReplay()
   stopCooldownCountdown()
@@ -798,7 +798,7 @@ async function backToGarage():
   duelStore.reset()
 
   await router.push({
-    name: 'garage',
+    name: 'duels',
   })
 }
 
@@ -849,10 +849,10 @@ onBeforeUnmount(
             button-secondary
           "
           @click="
-            backToGarage
+            backToDuels
           "
       >
-        Retour au garage
+        Retour aux Duels
       </button>
     </div>
 
@@ -871,7 +871,7 @@ onBeforeUnmount(
       </h2>
 
       <p>
-        Sélectionne un adversaire depuis le garage.
+        Sélectionne un adversaire depuis le matchmaking.
       </p>
 
       <button
@@ -881,10 +881,10 @@ onBeforeUnmount(
             button-primary
           "
           @click="
-            backToGarage
+            backToDuels
           "
       >
-        Ouvrir le garage
+        Ouvrir les duels
       </button>
     </div>
 
@@ -1637,10 +1637,10 @@ onBeforeUnmount(
                 button-primary
               "
               @click="
-                backToGarage
+                backToDuels
               "
           >
-            Retourner au garage
+            Retourner aux Duels
           </button>
         </section>
       </template>

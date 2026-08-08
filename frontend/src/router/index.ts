@@ -3,206 +3,473 @@ import {
     createWebHistory,
     type RouteRecordRaw,
 } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-import GarageView from '../views/GarageView.vue'
-import { useAuthStore } from '../stores/auth'
-import DuelView from '../views/DuelView.vue'
 
-import AdminDashboardView from '../views/admin/AdminDashboardView.vue'
-import AdminUsersView from '../views/admin/AdminUsersView.vue'
-import AdminUserDetailView from '../views/admin/AdminUserDetailView.vue'
-import AdminCarsView from '../views/admin/AdminCarsView.vue'
-import AdminCarDetailView from '../views/admin/AdminCarDetailView.vue'
-import AdminDuelsView from '../views/admin/AdminDuelsView.vue'
-import AdminDuelDetailView from '../views/admin/AdminDuelDetailView.vue'
-import AdminCardsView from '../views/admin/AdminCardsView.vue'
-import AdminCardDetailView from '../views/admin/AdminCardDetailView.vue'
-import AdminEventsView from '../views/admin/AdminEventsView.vue'
-import AdminGameSettingsView from '../views/admin/AdminGameSettingsView.vue'
+import {
+    useAuthStore,
+} from '../stores/auth'
 
-import CarVisualTestView from "../views/CarVisualTestView.vue";
+/*
+ * =====================================
+ * LAYOUT JEU
+ * =====================================
+ */
 
-const routes: RouteRecordRaw[] = [
-    {
-        path: '/',
-        redirect: '/garage',
-    },
+import GameLayout
+    from '../layouts/GameLayout.vue'
+
+/*
+ * =====================================
+ * JEU
+ * =====================================
+ */
+
+import LoginView
+    from '../views/LoginView.vue'
+
+import GarageView
+    from '../views/GarageView.vue'
+
+import DuelsView
+    from '../views/DuelsView.vue'
+
+import DuelView
+    from '../views/DuelView.vue'
+
+import TournamentsView
+    from '../views/TournamentsView.vue'
+
+import ClansView
+    from '../views/ClansView.vue'
+
+import ChatView
+    from '../views/ChatView.vue'
+
+import CarVisualTestView
+    from '../views/CarVisualTestView.vue'
+
+/*
+ * =====================================
+ * ADMIN
+ * =====================================
+ */
+
+import AdminDashboardView
+    from '../views/admin/AdminDashboardView.vue'
+
+import AdminUsersView
+    from '../views/admin/AdminUsersView.vue'
+
+import AdminUserDetailView
+    from '../views/admin/AdminUserDetailView.vue'
+
+import AdminCarsView
+    from '../views/admin/AdminCarsView.vue'
+
+import AdminCarDetailView
+    from '../views/admin/AdminCarDetailView.vue'
+
+import AdminDuelsView
+    from '../views/admin/AdminDuelsView.vue'
+
+import AdminDuelDetailView
+    from '../views/admin/AdminDuelDetailView.vue'
+
+import AdminCardsView
+    from '../views/admin/AdminCardsView.vue'
+
+import AdminCardDetailView
+    from '../views/admin/AdminCardDetailView.vue'
+
+import AdminEventsView
+    from '../views/admin/AdminEventsView.vue'
+
+import AdminGameSettingsView
+    from '../views/admin/AdminGameSettingsView.vue'
+
+const routes:
+    RouteRecordRaw[] = [
+    /*
+     * =====================================
+     * LOGIN
+     * =====================================
+     */
+
     {
         path: '/login',
+
         name: 'login',
-        component: LoginView,
+
+        component:
+        LoginView,
+
         meta: {
             guestOnly: true,
         },
     },
+
+    /*
+     * =====================================
+     * APPLICATION JOUEUR
+     *
+     * Toutes ces pages utilisent la
+     * navigation fixe en bas.
+     * =====================================
+     */
+
     {
-        path: '/garage',
-        name: 'garage',
-        component: GarageView,
+        path: '/',
+
+        component:
+        GameLayout,
+
         meta: {
             requiresAuth: true,
         },
+
+        children: [
+            {
+                path: '',
+
+                redirect: {
+                    name: 'garage',
+                },
+            },
+
+            {
+                path: 'garage',
+
+                name: 'garage',
+
+                component:
+                GarageView,
+            },
+
+            {
+                path: 'duels',
+
+                name: 'duels',
+
+                component:
+                DuelsView,
+            },
+
+            {
+                path: 'tournaments',
+
+                name: 'tournaments',
+
+                component:
+                TournamentsView,
+            },
+
+            {
+                path: 'clans',
+
+                name: 'clans',
+
+                component:
+                ClansView,
+            },
+
+            {
+                path: 'chat',
+
+                name: 'chat',
+
+                component:
+                ChatView,
+            },
+        ],
     },
-    {
-        path: '/:pathMatch(.*)*',
-        redirect: '/garage',
-    },
+
+    /*
+     * =====================================
+     * COURSE
+     *
+     * Hors GameLayout volontairement :
+     * aucune barre de navigation inférieure
+     * pendant le replay.
+     * =====================================
+     */
+
     {
         path: '/duel',
+
         name: 'duel',
-        component: DuelView,
+
+        component:
+        DuelView,
+
         meta: {
             requiresAuth: true,
+            immersive: true,
         },
     },
+
+    /*
+     * =====================================
+     * TEST VISUEL
+     * =====================================
+     */
+
     {
         path: '/test',
+
         name: 'test',
-        component: CarVisualTestView,
+
+        component:
+        CarVisualTestView,
+
         meta: {
             requiresAuth: true,
         },
     },
+
+    /*
+     * =====================================
+     * ADMINISTRATION
+     * =====================================
+     */
+
     {
         path: '/admin',
-        name: 'admin-dashboard',
-        component: AdminDashboardView,
+
+        name:
+            'admin-dashboard',
+
+        component:
+        AdminDashboardView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
         path: '/admin/users',
-        name: 'admin-users',
-        component: AdminUsersView,
+
+        name:
+            'admin-users',
+
+        component:
+        AdminUsersView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
-        path: '/admin/users/:id',
-        name: 'admin-user-detail',
-        component: AdminUserDetailView,
+        path:
+            '/admin/users/:id',
+
+        name:
+            'admin-user-detail',
+
+        component:
+        AdminUserDetailView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
         path: '/admin/cars',
-        name: 'admin-cars',
-        component: AdminCarsView,
+
+        name:
+            'admin-cars',
+
+        component:
+        AdminCarsView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
-        path: '/admin/cars/:id',
-        name: 'admin-car-detail',
-        component: AdminCarDetailView,
+        path:
+            '/admin/cars/:id',
+
+        name:
+            'admin-car-detail',
+
+        component:
+        AdminCarDetailView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
         path: '/admin/duels',
-        name: 'admin-duels',
-        component: AdminDuelsView,
+
+        name:
+            'admin-duels',
+
+        component:
+        AdminDuelsView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
-        path: '/admin/duels/:id',
-        name: 'admin-duel-detail',
-        component: AdminDuelDetailView,
+        path:
+            '/admin/duels/:id',
+
+        name:
+            'admin-duel-detail',
+
+        component:
+        AdminDuelDetailView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
         path: '/admin/cards',
-        name: 'admin-cards',
-        component: AdminCardsView,
+
+        name:
+            'admin-cards',
+
+        component:
+        AdminCardsView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
-        path: '/admin/cards/:id',
-        name: 'admin-card-detail',
-        component: AdminCardDetailView,
+        path:
+            '/admin/cards/:id',
+
+        name:
+            'admin-card-detail',
+
+        component:
+        AdminCardDetailView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
         path: '/admin/events',
-        name: 'admin-events',
-        component: AdminEventsView,
+
+        name:
+            'admin-events',
+
+        component:
+        AdminEventsView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
         },
     },
+
     {
-        path: '/admin/settings',
-        name: 'admin-game-settings',
-        component: AdminGameSettingsView,
+        path:
+            '/admin/settings',
+
+        name:
+            'admin-game-settings',
+
+        component:
+        AdminGameSettingsView,
+
         meta: {
             requiresAuth: true,
             requiresAdmin: true,
+        },
+    },
+
+    /*
+     * =====================================
+     * FALLBACK
+     * =====================================
+     */
+
+    {
+        path:
+            '/:pathMatch(.*)*',
+
+        redirect: {
+            name: 'garage',
         },
     },
 ]
 
-const router = createRouter({
-    history: createWebHistory(),
-    routes,
-})
+const router =
+    createRouter({
+        history:
+            createWebHistory(),
 
-router.beforeEach((to) => {
-    const authStore = useAuthStore()
+        routes,
+    })
 
-    if (
-        to.meta.requiresAuth
-        && !authStore.isAuthenticated
-    ) {
-        return {
-            name: 'login',
-            query: {
-                redirect: to.fullPath,
-            },
+/*
+ * =====================================
+ * GUARDS
+ * =====================================
+ */
+
+router.beforeEach(
+    (to) => {
+        const authStore =
+            useAuthStore()
+
+        if (
+            to.meta.requiresAuth
+            && !authStore.isAuthenticated
+        ) {
+            return {
+                name: 'login',
+
+                query: {
+                    redirect:
+                    to.fullPath,
+                },
+            }
         }
-    }
 
-    if (
-        to.meta.requiresAdmin
-        && !authStore.isAdmin
-    ) {
-        return {
-            name: 'garage',
+        if (
+            to.meta.requiresAdmin
+            && !authStore.isAdmin
+        ) {
+            return {
+                name: 'garage',
+            }
         }
-    }
 
-    if (
-        to.name === 'login'
-        && authStore.isAuthenticated
-    ) {
-        return {
-            name: 'garage',
+        if (
+            to.name === 'login'
+            && authStore.isAuthenticated
+        ) {
+            return {
+                name: 'garage',
+            }
         }
-    }
 
-    return true
-})
+        return true
+    },
+)
 
 export default router

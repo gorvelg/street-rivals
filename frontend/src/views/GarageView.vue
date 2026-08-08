@@ -6,8 +6,9 @@ import {
   watch,
 } from 'vue'
 
-import { useRouter }
-  from 'vue-router'
+import {
+  usePlayerCarStore,
+} from '../stores/playerCar'
 
 import CarVisual
   from '../components/CarVisual.vue'
@@ -15,53 +16,71 @@ import CarVisual
 import GarageCarCard
   from '../components/GarageCarCard.vue'
 
-import OpponentCard
-  from '../components/OpponentCard.vue'
-
 import {
   ApiError,
   apiRequest,
   getCollectionMembers,
 } from '../services/api'
 
+import {
+  CAR_BODIES,
+} from '../cars/bodies'
+
 import type {
   ApiCollection,
   Car,
+  CarBodyStyle,
   CarInventoryCard,
   CarStats,
   CarWheelStyle,
   EquipmentSlot,
   EquipCarCardResponse,
-  MatchmakingOpponent,
-  PendingDuel,
 } from '../types/api'
 
-import {
-  CAR_BODIES,
-} from '../cars/bodies'
+/*
+ * =====================================
+ * TYPES
+ * =====================================
+ */
 
-const router =
-    useRouter()
+type GarageTab =
+    | 'overview'
+    | 'equipment'
+    | 'cards'
+    | 'style'
+
+/*
+ * =====================================
+ * STORE
+ * =====================================
+ */
+
+const playerCarStore =
+    usePlayerCarStore()
+
+/*
+ * =====================================
+ * ÉTAT
+ * =====================================
+ */
 
 const cars =
     ref<Car[]>([])
 
 const selectedCarId =
-    ref<number | null>(null)
-
-const selectedOpponent =
-    ref<MatchmakingOpponent | null>(
+    ref<number | null>(
         null,
     )
 
 const carStats =
-    ref<CarStats | null>(null)
+    ref<CarStats | null>(
+        null,
+    )
 
 const carCards =
-    ref<CarInventoryCard[]>([])
-
-const opponents =
-    ref<MatchmakingOpponent[]>([])
+    ref<CarInventoryCard[]>(
+        [],
+    )
 
 const loadingCars =
     ref(false)
@@ -73,13 +92,54 @@ const creatingCar =
     ref(false)
 
 const equippingCarCardId =
-    ref<number | null>(null)
+    ref<number | null>(
+        null,
+    )
 
 const errorMessage =
     ref('')
 
 const successMessage =
     ref('')
+
+/*
+ * =====================================
+ * NAVIGATION INTERNE
+ * =====================================
+ */
+
+const activeTab =
+    ref<GarageTab>(
+        'overview',
+    )
+
+const tabs: Array<{
+  value: GarageTab
+  label: string
+}> = [
+  {
+    value: 'overview',
+    label: 'Aperçu',
+  },
+  {
+    value: 'equipment',
+    label: 'Équipement',
+  },
+  {
+    value: 'cards',
+    label: 'Cartes',
+  },
+  {
+    value: 'style',
+    label: 'Style',
+  },
+]
+
+/*
+ * =====================================
+ * CRÉATION
+ * =====================================
+ */
 
 const showCreateForm =
     ref(false)
@@ -88,16 +148,13 @@ const pilotName =
     ref('')
 
 const carColor =
-    ref('#e63946')
+    ref('#E63946')
 
 /*
  * =====================================
  * PERSONNALISATION
  * =====================================
  */
-
-const showCustomization =
-    ref(false)
 
 const savingCustomization =
     ref(false)
@@ -168,7 +225,7 @@ const equipmentSlots: Array<{
   },
   {
     key: 'gearbox',
-    label: 'Boîte de vitesses',
+    label: 'Boîte',
   },
   {
     key: 'chassis',
@@ -176,74 +233,100 @@ const equipmentSlots: Array<{
   },
   {
     key: 'aero',
-    label: 'Aérodynamique',
+    label: 'Aéro',
   },
 ]
 
+/*
+ * =====================================
+ * COMPUTED
+ * =====================================
+ */
+
 const selectedCar =
-    computed<Car | null>(() => {
-      return (
-          cars.value.find(
-              (car) =>
-                  car.id
-                  === selectedCarId.value,
-          )
-          ?? null
-      )
-    })
+    computed<Car | null>(
+        () =>
+            cars.value.find(
+                (car) =>
+                    car.id
+                    === selectedCarId.value,
+            )
+            ?? null,
+    )
 
 const abilityCards =
-    computed<CarInventoryCard[]>(() => {
-      return carCards.value.filter(
-          (carCard) =>
-              carCard.card.kind
-              === 'ability',
-      )
-    })
+    computed(
+        () =>
+            carCards.value.filter(
+                (carCard) =>
+                    carCard.card.kind
+                    === 'ability',
+            ),
+    )
 
 const statBoostCards =
-    computed<CarInventoryCard[]>(() => {
-      return carCards.value.filter(
-          (carCard) =>
-              carCard.card.kind
-              === 'stat_boost',
-      )
-    })
+    computed(
+        () =>
+            carCards.value.filter(
+                (carCard) =>
+                    carCard.card.kind
+                    === 'stat_boost',
+            ),
+    )
+
+const equipmentCards =
+    computed(
+        () =>
+            carCards.value.filter(
+                (carCard) =>
+                    carCard.card.kind
+                    === 'equipment',
+            ),
+    )
+
+const equippedCards =
+    computed(
+        () =>
+            equipmentCards.value.filter(
+                (carCard) =>
+                    carCard.equipped,
+            ),
+    )
 
 const equipmentGroups =
-    computed(() => {
-      return equipmentSlots.map(
-          (slot) => {
-            const cards =
-                carCards.value
-                    .filter(
-                        (carCard) =>
-                            carCard.card.kind
-                            === 'equipment'
-                            && carCard.card
-                                .equipmentSlot
-                            === slot.key,
-                    )
-                    .sort(
-                        (
-                            first,
-                            second,
-                        ) =>
-                            Number(
-                                second.equipped,
-                            )
-                            - Number(
-                                first.equipped,
-                            ),
-                    )
+    computed(
+        () => {
+          return equipmentSlots.map(
+              (slot) => {
+                const cards =
+                    equipmentCards.value
+                        .filter(
+                            (carCard) =>
+                                carCard.card
+                                    .equipmentSlot
+                                === slot.key,
+                        )
+                        .sort(
+                            (
+                                first,
+                                second,
+                            ) =>
+                                Number(
+                                    second.equipped,
+                                )
+                                - Number(
+                                    first.equipped,
+                                ),
+                        )
 
-            return {
-              ...slot,
-              cards,
-            }
-          },
-      )
-    })
+                return {
+                  ...slot,
+                  cards,
+                }
+              },
+          )
+        },
+    )
 
 /*
  * =====================================
@@ -253,8 +336,11 @@ const equipmentGroups =
 
 async function loadCars():
     Promise<void> {
-  loadingCars.value = true
-  errorMessage.value = ''
+  loadingCars.value =
+      true
+
+  errorMessage.value =
+      ''
 
   try {
     const response =
@@ -269,88 +355,94 @@ async function loadCars():
             response,
         )
 
-    if (cars.value.length === 0) {
-      showCreateForm.value = true
-      selectedCarId.value = null
+    if (
+        cars.value.length
+        === 0
+    ) {
+      selectedCarId.value =
+          null
+
+      showCreateForm.value =
+          true
+
+      playerCarStore
+          .clearSelection()
 
       return
     }
 
-    const storedCarValue =
-        localStorage.getItem(
-            'street-rivals-selected-car',
-        )
+    if (
+        !playerCarStore.initialized
+    ) {
+      playerCarStore
+          .restoreSelection()
+    }
 
-    const storedCarId =
-        storedCarValue !== null
-            ? Number.parseInt(
-                storedCarValue,
-                10,
-            )
-            : null
+    const storedId =
+        playerCarStore
+            .selectedCarId
 
-    const storedCarExists =
-        storedCarId !== null
-        && Number.isInteger(
-            storedCarId,
-        )
+    const storedExists =
+        storedId !== null
         && cars.value.some(
             (car) =>
                 car.id
-                === storedCarId,
+                === storedId,
         )
 
     selectedCarId.value =
-        storedCarExists
-            ? storedCarId
+        storedExists
+            ? storedId
             : cars.value[0].id
   } catch (error) {
-    handleError(error)
+    handleError(
+        error,
+    )
   } finally {
-    loadingCars.value = false
+    loadingCars.value =
+        false
   }
 }
 
 async function loadSelectedCarDetails():
     Promise<void> {
   if (
-      selectedCarId.value === null
+      selectedCarId.value
+      === null
   ) {
-    carStats.value = null
-    carCards.value = []
-    opponents.value = []
-    selectedOpponent.value = null
+    carStats.value =
+        null
+
+    carCards.value =
+        []
 
     return
   }
 
-  loadingDetails.value = true
-  errorMessage.value = ''
+  loadingDetails.value =
+      true
 
-  selectedOpponent.value = null
+  errorMessage.value =
+      ''
 
   try {
     const [
       statsResponse,
       cardsResponse,
-      opponentsResponse,
-    ] = await Promise.all([
-      apiRequest<CarStats>(
-          `/api/cars/${selectedCarId.value}/stats`,
-      ),
+    ] =
+        await Promise.all([
+          apiRequest<CarStats>(
+              `/api/cars/${selectedCarId.value}/stats`,
+          ),
 
-      apiRequest<
-          ApiCollection<CarInventoryCard>
-      >(
-          `/api/cars/${selectedCarId.value}/cards`,
-      ),
-
-      apiRequest<
-          ApiCollection<MatchmakingOpponent>
-      >(
-          `/api/cars/${selectedCarId.value}/opponents`,
-      ),
-    ])
+          apiRequest<
+              ApiCollection<
+                  CarInventoryCard
+              >
+          >(
+              `/api/cars/${selectedCarId.value}/cards`,
+          ),
+        ])
 
     carStats.value =
         statsResponse
@@ -359,31 +451,140 @@ async function loadSelectedCarDetails():
         getCollectionMembers(
             cardsResponse,
         )
-
-    opponents.value =
-        getCollectionMembers(
-            opponentsResponse,
-        )
   } catch (error) {
-    carStats.value = null
-    carCards.value = []
-    opponents.value = []
+    carStats.value =
+        null
 
-    handleError(error)
+    carCards.value =
+        []
+
+    handleError(
+        error,
+    )
   } finally {
-    loadingDetails.value = false
+    loadingDetails.value =
+        false
   }
 }
 
 /*
  * =====================================
- * PERSONNALISATION
+ * SÉLECTION
  * =====================================
  */
 
-function openCustomization():
+function selectCar(
+    carId: number,
+): void {
+  if (
+      selectedCarId.value
+      === carId
+  ) {
+    return
+  }
+
+  errorMessage.value =
+      ''
+
+  successMessage.value =
+      ''
+
+  activeTab.value =
+      'overview'
+
+  selectedCarId.value =
+      carId
+}
+
+/*
+ * =====================================
+ * CRÉATION
+ * =====================================
+ */
+
+async function createCar():
+    Promise<void> {
+  if (
+      creatingCar.value
+  ) {
+    return
+  }
+
+  creatingCar.value =
+      true
+
+  errorMessage.value =
+      ''
+
+  successMessage.value =
+      ''
+
+  try {
+    const createdCar =
+        await apiRequest<Car>(
+            '/api/cars',
+            {
+              method: 'POST',
+
+              body:
+                  JSON.stringify({
+                    pilotName:
+                    pilotName.value,
+
+                    color:
+                    carColor.value,
+
+                    bodyStyle:
+                        'coupe_01',
+
+                    wheelStyle:
+                        'street_01',
+                  }),
+            },
+        )
+
+    pilotName.value =
+        ''
+
+    showCreateForm.value =
+        false
+
+    await loadCars()
+
+    selectedCarId.value =
+        createdCar.id
+
+    playerCarStore.setCar(
+        createdCar,
+    )
+
+    successMessage.value =
+        'Voiture créée.'
+
+    activeTab.value =
+        'overview'
+  } catch (error) {
+    handleError(
+        error,
+    )
+  } finally {
+    creatingCar.value =
+        false
+  }
+}
+
+/*
+ * =====================================
+ * STYLE
+ * =====================================
+ */
+
+function loadCustomizationValues():
     void {
-  if (selectedCar.value === null) {
+  if (
+      selectedCar.value
+      === null
+  ) {
     return
   }
 
@@ -391,35 +592,40 @@ function openCustomization():
       selectedCar.value.color
 
   customizationBodyStyle.value =
-      selectedCar.value.bodyStyle
+      selectedCar.value
+          .bodyStyle
 
   customizationWheelStyle.value =
-      selectedCar.value.wheelStyle
-
-  errorMessage.value = ''
-  successMessage.value = ''
-
-  showCustomization.value = true
+      selectedCar.value
+          .wheelStyle
 }
 
-function closeCustomization():
+function openCustomization():
     void {
-  showCustomization.value = false
+  loadCustomizationValues()
+
+  activeTab.value =
+      'style'
 }
 
 async function saveCustomization():
     Promise<void> {
   if (
-      selectedCar.value === null
+      selectedCar.value
+      === null
       || savingCustomization.value
   ) {
     return
   }
 
-  savingCustomization.value = true
+  savingCustomization.value =
+      true
 
-  errorMessage.value = ''
-  successMessage.value = ''
+  errorMessage.value =
+      ''
+
+  successMessage.value =
+      ''
 
   try {
     const updatedCar =
@@ -433,16 +639,17 @@ async function saveCustomization():
                     'application/merge-patch+json',
               },
 
-              body: JSON.stringify({
-                color:
-                customizationColor.value,
+              body:
+                  JSON.stringify({
+                    color:
+                    customizationColor.value,
 
-                bodyStyle:
-                customizationBodyStyle.value,
+                    bodyStyle:
+                    customizationBodyStyle.value,
 
-                wheelStyle:
-                customizationWheelStyle.value,
-              }),
+                    wheelStyle:
+                    customizationWheelStyle.value,
+                  }),
             },
         )
 
@@ -453,18 +660,23 @@ async function saveCustomization():
                 === updatedCar.id,
         )
 
-    if (index !== -1) {
+    if (
+        index !== -1
+    ) {
       cars.value[index] =
           updatedCar
     }
 
-    showCustomization.value =
-        false
+    playerCarStore.setCar(
+        updatedCar,
+    )
 
     successMessage.value =
-        'La personnalisation a été enregistrée.'
+        'Style enregistré.'
   } catch (error) {
-    handleError(error)
+    handleError(
+        error,
+    )
   } finally {
     savingCustomization.value =
         false
@@ -478,11 +690,14 @@ async function saveCustomization():
  */
 
 async function equipCarCard(
-    carCard: CarInventoryCard,
+    carCard:
+    CarInventoryCard,
 ): Promise<void> {
   if (
-      selectedCarId.value === null
-      || equippingCarCardId.value !== null
+      selectedCarId.value
+      === null
+      || equippingCarCardId.value
+      !== null
   ) {
     return
   }
@@ -490,8 +705,11 @@ async function equipCarCard(
   equippingCarCardId.value =
       carCard.carCardId
 
-  errorMessage.value = ''
-  successMessage.value = ''
+  errorMessage.value =
+      ''
+
+  successMessage.value =
+      ''
 
   try {
     const response =
@@ -507,186 +725,32 @@ async function equipCarCard(
     carStats.value =
         response.stats
 
-    const [
-      cardsResponse,
-      opponentsResponse,
-    ] = await Promise.all([
-      apiRequest<
-          ApiCollection<CarInventoryCard>
-      >(
-          `/api/cars/${selectedCarId.value}/cards`,
-      ),
-
-      apiRequest<
-          ApiCollection<MatchmakingOpponent>
-      >(
-          `/api/cars/${selectedCarId.value}/opponents`,
-      ),
-    ])
+    const cardsResponse =
+        await apiRequest<
+            ApiCollection<
+                CarInventoryCard
+            >
+        >(
+            `/api/cars/${selectedCarId.value}/cards`,
+        )
 
     carCards.value =
         getCollectionMembers(
             cardsResponse,
         )
 
-    opponents.value =
-        getCollectionMembers(
-            opponentsResponse,
-        )
-
-    selectedOpponent.value =
-        null
-
     successMessage.value =
         response.updated
-            ? `${carCard.card.name} est maintenant équipé.`
+            ? `${carCard.card.name} équipé.`
             : `${carCard.card.name} était déjà équipé.`
   } catch (error) {
-    handleError(error)
+    handleError(
+        error,
+    )
   } finally {
     equippingCarCardId.value =
         null
   }
-}
-
-/*
- * =====================================
- * CRÉATION
- * =====================================
- */
-
-async function createCar():
-    Promise<void> {
-  creatingCar.value = true
-
-  errorMessage.value = ''
-  successMessage.value = ''
-
-  try {
-    const createdCar =
-        await apiRequest<Car>(
-            '/api/cars',
-            {
-              method: 'POST',
-
-              body: JSON.stringify({
-                pilotName:
-                pilotName.value,
-
-                color:
-                carColor.value,
-
-                bodyStyle:
-                    'coupe_01',
-
-                wheelStyle:
-                    'street_01',
-              }),
-            },
-        )
-
-    pilotName.value = ''
-
-    showCreateForm.value =
-        false
-
-    await loadCars()
-
-    selectedCarId.value =
-        createdCar.id
-
-    successMessage.value =
-        'La voiture a été créée avec succès.'
-  } catch (error) {
-    handleError(error)
-  } finally {
-    creatingCar.value = false
-  }
-}
-
-function selectCar(
-    carId: number,
-): void {
-  successMessage.value = ''
-
-  showCustomization.value =
-      false
-
-  selectedCarId.value =
-      carId
-}
-
-function selectOpponent(
-    opponent: MatchmakingOpponent,
-): void {
-  if (
-      selectedCarId.value === null
-      || selectedCar.value === null
-  ) {
-    return
-  }
-
-  selectedOpponent.value =
-      opponent
-
-  const pendingDuel: PendingDuel = {
-    attackerCarId:
-    selectedCarId.value,
-
-    attackerPilotName:
-    selectedCar.value.pilotName,
-
-    attackerColor:
-    selectedCar.value.color,
-
-    attackerBodyStyle:
-    selectedCar.value.bodyStyle,
-
-    attackerWheelStyle:
-    selectedCar.value.wheelStyle,
-
-    defenderCarId:
-    opponent.carId,
-
-    defenderPilotName:
-    opponent.pilotName,
-
-    defenderColor:
-    opponent.color,
-
-    defenderBodyStyle:
-    opponent.bodyStyle,
-
-    defenderWheelStyle:
-    opponent.wheelStyle,
-
-    difficulty:
-    opponent.difficulty,
-  }
-
-  sessionStorage.setItem(
-      'street-rivals-pending-duel',
-      JSON.stringify(
-          pendingDuel,
-      ),
-  )
-
-  successMessage.value =
-      `${opponent.pilotName} a été sélectionné.`
-}
-
-async function openDuel():
-    Promise<void> {
-  if (
-      selectedOpponent.value === null
-      || selectedCarId.value === null
-  ) {
-    return
-  }
-
-  await router.push({
-    name: 'duel',
-  })
 }
 
 /*
@@ -698,7 +762,9 @@ async function openDuel():
 function statLabel(
     stat: string,
 ): string {
-  switch (stat) {
+  switch (
+      stat
+      ) {
     case 'speed':
       return 'vitesse'
 
@@ -719,40 +785,57 @@ function statLabel(
 function signedValue(
     value: number,
 ): string {
-  if (value > 0) {
+  if (
+      value > 0
+  ) {
     return `+${value}`
   }
 
-  return String(value)
+  return String(
+      value,
+  )
 }
 
 function formatTierEffect(
-    carCard: CarInventoryCard,
+    carCard:
+    CarInventoryCard,
 ): string {
   const tiers =
-      carCard.card.effectConfig
+      carCard.card
+          .effectConfig
           .tiers
 
   if (
-      typeof tiers !== 'object'
+      typeof tiers
+      !== 'object'
       || tiers === null
   ) {
-    return carCard.card.description
+    return carCard.card
+        .description
   }
 
   const configuration =
       (
           tiers as Record<
               string,
-              Record<string, unknown>
+              Record<
+                  string,
+                  unknown
+              >
           >
-      )[String(carCard.tier)]
+      )[
+          String(
+              carCard.tier,
+          )
+          ]
 
   if (
-      typeof configuration !== 'object'
+      typeof configuration
+      !== 'object'
       || configuration === null
   ) {
-    return carCard.card.description
+    return carCard.card
+        .description
   }
 
   const effects =
@@ -770,15 +853,26 @@ function formatTierEffect(
                   === 'number',
           )
           .map(
-              ([stat, value]) =>
+              (
+                  [
+                    stat,
+                    value,
+                  ],
+              ) =>
                   `${signedValue(value)} ${statLabel(stat)}`,
           )
 
-  if (effects.length === 0) {
-    return carCard.card.description
+  if (
+      effects.length
+      === 0
+  ) {
+    return carCard.card
+        .description
   }
 
-  return effects.join(' · ')
+  return effects.join(
+      ' · ',
+  )
 }
 
 function formatAppliedCard(
@@ -786,15 +880,23 @@ function formatAppliedCard(
     stat: string,
 ): string {
   return (
-      `${signedValue(value)}` +
-      ` ${statLabel(stat)}`
+      `${signedValue(value)}`
+      + ` ${statLabel(stat)}`
   )
 }
+
+/*
+ * =====================================
+ * ERREURS
+ * =====================================
+ */
 
 function handleError(
     error: unknown,
 ): void {
-  if (error instanceof ApiError) {
+  if (
+      error instanceof ApiError
+  ) {
     errorMessage.value =
         error.message
 
@@ -813,33 +915,40 @@ function handleError(
 
 watch(
     selectedCarId,
-    async (carId) => {
-      if (carId === null) {
-        localStorage.removeItem(
-            'street-rivals-selected-car',
-        )
 
-        carStats.value = null
-        carCards.value = []
-        opponents.value = []
+    async (
+        carId,
+    ) => {
+      if (
+          carId === null
+      ) {
+        playerCarStore
+            .clearSelection()
 
-        selectedOpponent.value =
+        carStats.value =
             null
 
-        showCustomization.value =
-            false
+        carCards.value =
+            []
 
         return
       }
 
-      localStorage.setItem(
-          'street-rivals-selected-car',
-          String(carId),
+      playerCarStore.selectCar(
+          carId,
       )
+
+      loadCustomizationValues()
 
       await loadSelectedCarDetails()
     },
 )
+
+/*
+ * =====================================
+ * INIT
+ * =====================================
+ */
 
 onMounted(
     async () => {
@@ -850,75 +959,139 @@ onMounted(
 
 <template>
   <section class="garage-page">
-    <div class="page-heading">
+    <!-- =====================================
+         TOP BAR
+    ====================================== -->
+
+    <header class="garage-header">
       <div>
         <p class="eyebrow">
-          Mon garage
+          Street Rivals
         </p>
 
         <h1>
-          Choisis ton pilote
+          Garage
         </h1>
       </div>
 
       <button
           type="button"
-          class="button button-secondary"
+          class="
+            button
+            button-secondary
+            add-car-button
+          "
           @click="
             showCreateForm =
               !showCreateForm
           "
       >
-        Ajouter une voiture
+        <span class="add-symbol">
+          +
+        </span>
+
+        <span class="add-label">
+          Ajouter
+        </span>
       </button>
-    </div>
+    </header>
+
+    <!-- =====================================
+         MESSAGES
+    ====================================== -->
 
     <p
-        v-if="errorMessage !== ''"
-        class="alert alert-error"
+        v-if="
+          errorMessage !== ''
+        "
+        class="
+          alert
+          alert-error
+        "
     >
       {{ errorMessage }}
     </p>
 
     <p
-        v-if="successMessage !== ''"
-        class="alert alert-success"
+        v-if="
+          successMessage !== ''
+        "
+        class="
+          alert
+          alert-success
+        "
     >
       {{ successMessage }}
     </p>
 
-    <!-- ===============================
+    <!-- =====================================
          CRÉATION
-    ================================ -->
+    ====================================== -->
 
     <form
-        v-if="showCreateForm"
-        class="panel create-car-form"
-        @submit.prevent="createCar"
+        v-if="
+          showCreateForm
+        "
+        class="
+          garage-card
+          create-car-form
+        "
+        @submit.prevent="
+          createCar
+        "
     >
-      <h2>
-        Nouvelle voiture
-      </h2>
+      <div class="card-heading">
+        <div>
+          <p class="eyebrow">
+            Nouveau pilote
+          </p>
 
-      <div class="form-row">
-        <label class="form-grow">
-          Nom du pilote
+          <h2>
+            Ajouter une voiture
+          </h2>
+        </div>
+
+        <button
+            type="button"
+            class="close-button"
+            aria-label="Fermer"
+            @click="
+              showCreateForm =
+                false
+            "
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="create-fields">
+        <label class="field">
+          <span>
+            Nom du pilote
+          </span>
 
           <input
-              v-model.trim="pilotName"
+              v-model.trim="
+                pilotName
+              "
               type="text"
               minlength="3"
               maxlength="32"
               autocomplete="off"
+              placeholder="Raven"
               required
           >
         </label>
 
-        <label>
-          Couleur
+        <label class="field color-field">
+          <span>
+            Couleur
+          </span>
 
           <input
-              v-model="carColor"
+              v-model="
+                carColor
+              "
               type="color"
               required
           >
@@ -926,8 +1099,14 @@ onMounted(
 
         <button
             type="submit"
-            class="button button-primary"
-            :disabled="creatingCar"
+            class="
+              button
+              button-primary
+              create-button
+            "
+            :disabled="
+              creatingCar
+            "
         >
           {{
             creatingCar
@@ -938,100 +1117,194 @@ onMounted(
       </div>
     </form>
 
-    <p v-if="loadingCars">
-      Chargement du garage...
-    </p>
-
-    <!-- ===============================
-         LISTE DES VOITURES
-    ================================ -->
+    <!-- =====================================
+         LOADING
+    ====================================== -->
 
     <div
-        v-else-if="
-          cars.length > 0
+        v-if="
+          loadingCars
         "
-        class="garage-list"
+        class="
+          garage-card
+          loading-card
+        "
     >
-      <GarageCarCard
-          v-for="car in cars"
-          :key="car.id"
-          :car="car"
-          :selected="
-            car.id
-            === selectedCarId
-          "
-          @select="selectCar"
-      />
+      Chargement du garage...
     </div>
 
+    <!-- =====================================
+         GARAGE VIDE
+    ====================================== -->
+
     <div
         v-else-if="
-          !showCreateForm
+          cars.length === 0
+          && !showCreateForm
         "
-        class="empty-state"
+        class="
+          garage-card
+          empty-garage
+        "
     >
+      <div class="empty-icon">
+        +
+      </div>
+
       <h2>
         Ton garage est vide
       </h2>
 
       <p>
-        Crée ta première voiture pour commencer à jouer.
+        Crée ta première voiture pour commencer
+        à jouer.
       </p>
 
       <button
           type="button"
-          class="button button-primary"
+          class="
+            button
+            button-primary
+          "
           @click="
-            showCreateForm = true
+            showCreateForm =
+              true
           "
       >
-        Créer une voiture
+        Créer ma voiture
       </button>
     </div>
 
     <template
-        v-if="
+        v-else-if="
           selectedCar !== null
         "
     >
-      <!-- ===============================
-           VOITURE SÉLECTIONNÉE
-      ================================ -->
+      <!-- =================================
+           SÉLECTEUR DE VOITURES
+      ================================== -->
 
       <section
-          class="panel selected-car-panel"
+          v-if="
+            cars.length > 1
+          "
+          class="
+            garage-selector-section
+          "
       >
-        <div class="section-heading">
+        <div class="section-title-row">
+          <span>
+            Mes voitures
+          </span>
+
+          <small>
+            {{
+              cars.length
+            }}
+          </small>
+        </div>
+
+        <div class="garage-list">
+          <GarageCarCard
+              v-for="
+                car in cars
+              "
+              :key="
+                car.id
+              "
+              :car="
+                car
+              "
+              :selected="
+                car.id
+                === selectedCarId
+              "
+              @select="
+                selectCar
+              "
+          />
+        </div>
+      </section>
+
+      <!-- =================================
+           HERO
+      ================================== -->
+
+      <section
+          class="
+            garage-card
+            car-hero
+          "
+      >
+        <div class="hero-heading">
           <div>
             <p class="eyebrow">
-              Voiture sélectionnée
+              Pilote actif
             </p>
 
             <h2>
-              {{ selectedCar.pilotName }}
+              {{
+                selectedCar
+                    .pilotName
+              }}
             </h2>
 
-            <p class="selected-car-meta">
-              Niveau
-              {{ selectedCar.level }}
-              ·
-              {{ selectedCar.rating ?? 1000 }}
-              Elo
-            </p>
+            <div class="pilot-meta">
+              <span>
+                NIV.
+                <strong>
+                  {{
+                    selectedCar.level
+                  }}
+                </strong>
+              </span>
+
+              <span>
+                ELO
+                <strong>
+                  {{
+                    selectedCar.rating
+                    ?? 1000
+                  }}
+                </strong>
+              </span>
+
+              <span>
+                <strong>
+                  {{
+                    selectedCar.wins
+                  }}
+                </strong>
+                V
+              </span>
+
+              <span>
+                <strong>
+                  {{
+                    selectedCar.losses
+                  }}
+                </strong>
+                D
+              </span>
+            </div>
           </div>
 
           <button
               type="button"
-              class="button button-secondary"
+              class="
+                style-shortcut
+              "
               @click="
                 openCustomization
               "
           >
-            Personnaliser
+            Modifier
           </button>
         </div>
 
-        <div class="selected-car-visual">
+        <div class="hero-car">
+          <div class="garage-floor" />
+
           <CarVisual
               :color="
                 selectedCar.color
@@ -1048,190 +1321,786 @@ onMounted(
           />
         </div>
 
-        <p v-if="loadingDetails">
-          Calcul des statistiques...
-        </p>
+        <!-- STATS -->
 
-        <template
+        <div
+            v-if="
+              loadingDetails
+            "
+            class="stats-loading"
+        >
+          Chargement des stats...
+        </div>
+
+        <div
             v-else-if="
               carStats !== null
             "
+            class="hero-stats"
         >
-          <div class="stats-grid">
+          <article>
+            <span>
+              Vitesse
+            </span>
+
+            <strong>
+              {{
+                carStats
+                    .effective
+                    .speed
+              }}
+            </strong>
+
+            <small>
+              {{
+                signedValue(
+                    carStats
+                        .bonuses
+                        .speed,
+                )
+              }}
+            </small>
+          </article>
+
+          <article>
+            <span>
+              Accél.
+            </span>
+
+            <strong>
+              {{
+                carStats
+                    .effective
+                    .acceleration
+              }}
+            </strong>
+
+            <small>
+              {{
+                signedValue(
+                    carStats
+                        .bonuses
+                        .acceleration,
+                )
+              }}
+            </small>
+          </article>
+
+          <article>
+            <span>
+              Grip
+            </span>
+
+            <strong>
+              {{
+                carStats
+                    .effective
+                    .grip
+              }}
+            </strong>
+
+            <small>
+              {{
+                signedValue(
+                    carStats
+                        .bonuses
+                        .grip,
+                )
+              }}
+            </small>
+          </article>
+
+          <article>
+            <span>
+              Solidité
+            </span>
+
+            <strong>
+              {{
+                carStats
+                    .effective
+                    .solidity
+              }}
+            </strong>
+
+            <small>
+              {{
+                signedValue(
+                    carStats
+                        .bonuses
+                        .solidity,
+                )
+              }}
+            </small>
+          </article>
+        </div>
+      </section>
+
+      <!-- =================================
+           ONGLETS
+      ================================== -->
+
+      <nav
+          class="
+            garage-tabs
+          "
+          aria-label="
+            Sections du garage
+          "
+      >
+        <button
+            v-for="
+              tab in tabs
+            "
+            :key="
+              tab.value
+            "
+            type="button"
+            class="garage-tab"
+            :class="{
+              'garage-tab-active':
+                activeTab
+                === tab.value,
+            }"
+            @click="
+              activeTab =
+                tab.value
+            "
+        >
+          {{
+            tab.label
+          }}
+        </button>
+      </nav>
+
+      <!-- =================================
+           APERÇU
+      ================================== -->
+
+      <section
+          v-if="
+            activeTab
+            === 'overview'
+          "
+          class="
+            garage-tab-content
+          "
+      >
+        <!-- RÉSUMÉ -->
+
+        <div class="summary-grid">
+          <article class="summary-card">
+            <span class="summary-number">
+              {{
+                equippedCards.length
+              }}
+              /
+              {{
+                equipmentSlots.length
+              }}
+            </span>
+
+            <strong>
+              Équipements
+            </strong>
+
+            <small>
+              emplacements utilisés
+            </small>
+
+            <button
+                type="button"
+                class="
+                  summary-link
+                "
+                @click="
+                  activeTab =
+                    'equipment'
+                "
+            >
+              Voir l'équipement
+            </button>
+          </article>
+
+          <article class="summary-card">
+            <span class="summary-number">
+              {{
+                statBoostCards.length
+              }}
+            </span>
+
+            <strong>
+              Bonus
+            </strong>
+
+            <small>
+              améliorations permanentes
+            </small>
+
+            <button
+                type="button"
+                class="
+                  summary-link
+                "
+                @click="
+                  activeTab =
+                    'cards'
+                "
+            >
+              Voir les cartes
+            </button>
+          </article>
+
+          <article class="summary-card">
+            <span class="summary-number">
+              {{
+                abilityCards.length
+              }}
+            </span>
+
+            <strong>
+              Capacités
+            </strong>
+
+            <small>
+              compétences débloquées
+            </small>
+
+            <button
+                type="button"
+                class="
+                  summary-link
+                "
+                @click="
+                  activeTab =
+                    'cards'
+                "
+            >
+              Voir les capacités
+            </button>
+          </article>
+        </div>
+
+        <!-- EFFETS -->
+
+        <section
+            v-if="
+              carStats !== null
+            "
+            class="
+              garage-card
+              applied-effects
+            "
+        >
+          <div class="card-heading">
             <div>
-              <span>Vitesse</span>
+              <p class="eyebrow">
+                Performance
+              </p>
 
-              <strong>
-                {{
-                  carStats.effective
-                      .speed
-                }}
-              </strong>
-
-              <small>
-                Base
-                {{ carStats.base.speed }}
-                ·
-                {{
-                  signedValue(
-                      carStats.bonuses
-                          .speed,
-                  )
-                }}
-              </small>
-            </div>
-
-            <div>
-              <span>
-                Accélération
-              </span>
-
-              <strong>
-                {{
-                  carStats.effective
-                      .acceleration
-                }}
-              </strong>
-
-              <small>
-                Base
-                {{
-                  carStats.base
-                      .acceleration
-                }}
-                ·
-                {{
-                  signedValue(
-                      carStats.bonuses
-                          .acceleration,
-                  )
-                }}
-              </small>
-            </div>
-
-            <div>
-              <span>
-                Grip
-              </span>
-
-              <strong>
-                {{
-                  carStats.effective
-                      .grip
-                }}
-              </strong>
-
-              <small>
-                Base
-                {{
-                  carStats.base.grip
-                }}
-                ·
-                {{
-                  signedValue(
-                      carStats.bonuses
-                          .grip,
-                  )
-                }}
-              </small>
-            </div>
-
-            <div>
-              <span>
-                Solidité
-              </span>
-
-              <strong>
-                {{
-                  carStats.effective
-                      .solidity
-                }}
-              </strong>
-
-              <small>
-                Base
-                {{
-                  carStats.base
-                      .solidity
-                }}
-                ·
-                {{
-                  signedValue(
-                      carStats.bonuses
-                          .solidity,
-                  )
-                }}
-              </small>
+              <h3>
+                Effets actifs
+              </h3>
             </div>
           </div>
 
-          <div
+          <p
               v-if="
-                carStats.appliedCards
-                    .length > 0
+                carStats
+                    .appliedCards
+                    .length
+                === 0
               "
-              class="applied-cards"
+              class="muted-text"
           >
-            <h3>
-              Effets actuellement appliqués
-            </h3>
+            Aucun effet de carte n'est
+            actuellement appliqué.
+          </p>
 
-            <ul>
-              <li
-                  v-for="
-                    (
-                      card,
-                      index
-                    ) in
-                      carStats.appliedCards
-                  "
-                  :key="
-                    `${card.carCardId}-${card.stat}-${index}`
-                  "
-              >
-                {{ card.name }}
-                · T{{ card.tier }}
-                ·
+          <div
+              v-else
+              class="
+                effects-list
+              "
+          >
+            <div
+                v-for="
+                  (
+                    card,
+                    index
+                  ) in
+                    carStats
+                        .appliedCards
+                "
+                :key="
+                  `${card.carCardId}-${card.stat}-${index}`
+                "
+                class="effect-row"
+            >
+              <div>
+                <strong>
+                  {{
+                    card.name
+                  }}
+                </strong>
+
+                <small>
+                  Palier
+                  {{
+                    card.tier
+                  }}
+                </small>
+              </div>
+
+              <span>
                 {{
                   formatAppliedCard(
                       card.value,
                       card.stat,
                   )
                 }}
-              </li>
-            </ul>
+              </span>
+            </div>
           </div>
-        </template>
+        </section>
       </section>
 
-      <!-- ===============================
-           PERSONNALISATION
-      ================================ -->
+      <!-- =================================
+           ÉQUIPEMENTS
+      ================================== -->
 
       <section
-          v-if="
-            showCustomization
+          v-else-if="
+            activeTab
+            === 'equipment'
           "
           class="
-            panel
-            customization-panel
+            garage-tab-content
           "
       >
-        <div class="section-heading">
+        <div class="tab-heading">
+          <div>
+            <p class="eyebrow">
+              Configuration
+            </p>
+
+            <h2>
+              Équipement
+            </h2>
+          </div>
+
+          <span>
+            {{
+              equippedCards.length
+            }}
+            /
+            {{
+              equipmentSlots.length
+            }}
+          </span>
+        </div>
+
+        <div class="equipment-grid">
+          <article
+              v-for="
+                group in
+                  equipmentGroups
+              "
+              :key="
+                group.key
+              "
+              class="
+                equipment-slot
+              "
+          >
+            <div
+                class="
+                  equipment-slot-heading
+                "
+            >
+              <span
+                  class="
+                    slot-indicator
+                  "
+                  :class="{
+                    'slot-indicator-filled':
+                      group.cards.some(
+                          (card) =>
+                              card.equipped,
+                      ),
+                  }"
+              />
+
+              <h3>
+                {{
+                  group.label
+                }}
+              </h3>
+            </div>
+
+            <p
+                v-if="
+                  group.cards.length
+                  === 0
+                "
+                class="
+                  empty-slot
+                "
+            >
+              Aucun équipement
+            </p>
+
+            <div
+                v-else
+                class="
+                  equipment-options
+                "
+            >
+              <article
+                  v-for="
+                    carCard in
+                      group.cards
+                  "
+                  :key="
+                    carCard.carCardId
+                  "
+                  class="
+                    inventory-card
+                  "
+                  :class="{
+                    'inventory-card-equipped':
+                      carCard.equipped,
+                  }"
+              >
+                <div class="inventory-info">
+                  <div
+                      class="
+                        inventory-title
+                      "
+                  >
+                    <strong>
+                      {{
+                        carCard.card
+                            .name
+                      }}
+                    </strong>
+
+                    <span>
+                      T{{
+                        carCard.tier
+                      }}
+                    </span>
+                  </div>
+
+                  <p>
+                    {{
+                      formatTierEffect(
+                          carCard,
+                      )
+                    }}
+                  </p>
+                </div>
+
+                <span
+                    v-if="
+                      carCard.equipped
+                    "
+                    class="
+                      status-badge
+                      status-equipped
+                    "
+                >
+                  Équipé
+                </span>
+
+                <button
+                    v-else
+                    type="button"
+                    class="
+                      equip-button
+                    "
+                    :disabled="
+                      equippingCarCardId
+                      !== null
+                    "
+                    @click="
+                      equipCarCard(
+                          carCard,
+                      )
+                    "
+                >
+                  {{
+                    equippingCarCardId
+                    === carCard.carCardId
+                        ? '...'
+                        : 'Équiper'
+                  }}
+                </button>
+              </article>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- =================================
+           CARTES
+      ================================== -->
+
+      <section
+          v-else-if="
+            activeTab
+            === 'cards'
+          "
+          class="
+            garage-tab-content
+          "
+      >
+        <div class="tab-heading">
+          <div>
+            <p class="eyebrow">
+              Collection
+            </p>
+
+            <h2>
+              Cartes
+            </h2>
+          </div>
+        </div>
+
+        <!-- BONUS -->
+
+        <section
+            class="
+              card-category
+            "
+        >
+          <div
+              class="
+                category-heading
+              "
+          >
+            <div>
+              <h3>
+                Bonus permanents
+              </h3>
+
+              <p>
+                Toujours appliqués aux
+                statistiques de la voiture.
+              </p>
+            </div>
+
+            <span>
+              {{
+                statBoostCards.length
+              }}
+            </span>
+          </div>
+
+          <p
+              v-if="
+                statBoostCards.length
+                === 0
+              "
+              class="
+                empty-category
+              "
+          >
+            Aucun bonus permanent.
+          </p>
+
+          <div
+              v-else
+              class="
+                cards-grid
+              "
+          >
+            <article
+                v-for="
+                  carCard in
+                    statBoostCards
+                "
+                :key="
+                  carCard.carCardId
+                "
+                class="game-card"
+            >
+              <div
+                  class="
+                    game-card-tier
+                  "
+              >
+                T{{
+                  carCard.tier
+                }}
+              </div>
+
+              <strong>
+                {{
+                  carCard.card.name
+                }}
+              </strong>
+
+              <p>
+                {{
+                  formatTierEffect(
+                      carCard,
+                  )
+                }}
+              </p>
+
+              <small>
+                Palier
+                {{
+                  carCard.tier
+                }}
+                /
+                {{
+                  carCard.card
+                      .maxTier
+                }}
+              </small>
+            </article>
+          </div>
+        </section>
+
+        <!-- CAPACITÉS -->
+
+        <section
+            class="
+              card-category
+            "
+        >
+          <div
+              class="
+                category-heading
+              "
+          >
+            <div>
+              <h3>
+                Capacités
+              </h3>
+
+              <p>
+                Compétences pouvant intervenir
+                pendant les courses.
+              </p>
+            </div>
+
+            <span>
+              {{
+                abilityCards.length
+              }}
+            </span>
+          </div>
+
+          <p
+              v-if="
+                abilityCards.length
+                === 0
+              "
+              class="
+                empty-category
+              "
+          >
+            Aucune capacité débloquée.
+          </p>
+
+          <div
+              v-else
+              class="
+                cards-grid
+              "
+          >
+            <article
+                v-for="
+                  carCard in
+                    abilityCards
+                "
+                :key="
+                  carCard.carCardId
+                "
+                class="game-card"
+            >
+              <div
+                  class="
+                    game-card-tier
+                  "
+              >
+                T{{
+                  carCard.tier
+                }}
+              </div>
+
+              <strong>
+                {{
+                  carCard.card.name
+                }}
+              </strong>
+
+              <p>
+                {{
+                  carCard.card
+                      .description
+                }}
+              </p>
+
+              <small>
+                Palier
+                {{
+                  carCard.tier
+                }}
+                /
+                {{
+                  carCard.card
+                      .maxTier
+                }}
+              </small>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <!-- =================================
+           STYLE
+      ================================== -->
+
+      <section
+          v-else-if="
+            activeTab
+            === 'style'
+          "
+          class="
+            garage-tab-content
+          "
+      >
+        <div class="tab-heading">
           <div>
             <p class="eyebrow">
               Atelier
             </p>
 
             <h2>
-              Personnaliser
-              {{ selectedCar.pilotName }}
+              Personnalisation
             </h2>
           </div>
         </div>
 
-        <div class="customization-layout">
-          <div class="customization-preview">
+        <!-- PREVIEW -->
+
+        <section
+            class="
+              garage-card
+              style-preview
+            "
+        >
+          <div class="preview-car">
+            <div
+                class="
+                  garage-floor
+                "
+            />
+
             <CarVisual
                 :color="
                   customizationColor
@@ -1247,52 +2116,64 @@ onMounted(
                 "
             />
           </div>
+        </section>
 
-          <div class="customization-controls">
-            <!-- COULEUR -->
+        <div class="style-sections">
+          <!-- COULEUR -->
 
-            <fieldset
-                class="customization-group"
+          <section
+              class="
+                style-section
+              "
+          >
+            <h3>
+              Couleur
+            </h3>
+
+            <div class="color-list">
+              <button
+                  v-for="
+                    color in
+                      quickColors
+                  "
+                  :key="
+                    color
+                  "
+                  type="button"
+                  class="
+                    color-button
+                  "
+                  :class="{
+                    'color-button-selected':
+                      customizationColor
+                          .toUpperCase()
+                      === color
+                          .toUpperCase(),
+                  }"
+                  :style="{
+                    backgroundColor:
+                      color,
+                  }"
+                  :aria-label="
+                    `Couleur ${color}`
+                  "
+                  @click="
+                    customizationColor =
+                      color
+                  "
+              />
+            </div>
+
+            <label
+                class="
+                  custom-color-row
+                "
             >
-              <legend>
-                Couleur
-              </legend>
+              <span>
+                Personnalisée
+              </span>
 
-              <div class="color-list">
-                <button
-                    v-for="
-                      color in
-                        quickColors
-                    "
-                    :key="color"
-                    type="button"
-                    class="color-button"
-                    :class="{
-                      'color-button-selected':
-                        customizationColor
-                        .toUpperCase()
-                        === color
-                        .toUpperCase(),
-                    }"
-                    :style="{
-                      backgroundColor:
-                        color,
-                    }"
-                    :aria-label="
-                      `Couleur ${color}`
-                    "
-                    @click="
-                      customizationColor =
-                        color
-                    "
-                />
-              </div>
-
-              <label
-                  class="custom-color-picker"
-              >
-                Couleur personnalisée
-
+              <div>
                 <input
                     v-model="
                       customizationColor
@@ -1300,116 +2181,119 @@ onMounted(
                     type="color"
                 >
 
-                <span>
+                <strong>
                   {{
                     customizationColor
                         .toUpperCase()
                   }}
-                </span>
-              </label>
-            </fieldset>
-
-            <!-- CARROSSERIE -->
-
-            <fieldset
-                class="customization-group"
-            >
-              <legend>
-                Carrosserie
-              </legend>
-
-              <div
-                  class="
-                    customization-option-grid
-                  "
-              >
-                <button
-                    v-for="
-      body in
-        CAR_BODIES
-    "
-                    :key="
-      body.code
-    "
-                    type="button"
-                    class="
-      customization-option
-    "
-                    :class="{
-      'customization-option-selected':
-        customizationBodyStyle
-        === body.code,
-    }"
-                    @click="
-      customizationBodyStyle =
-        body.code
-    "
-                >
-                  {{ body.label }}
-                </button>
+                </strong>
               </div>
-            </fieldset>
+            </label>
+          </section>
 
-            <!-- JANTES -->
+          <!-- CARROSSERIE -->
 
-            <fieldset
-                class="customization-group"
-            >
-              <legend>
-                Jantes
-              </legend>
-
-              <div
-                  class="
-                    customization-option-grid
-                  "
-              >
-                <button
-                    v-for="
-                      wheel in
-                        wheelStyles
-                    "
-                    :key="
-                      wheel.value
-                    "
-                    type="button"
-                    class="
-                      customization-option
-                    "
-                    :class="{
-                      'customization-option-selected':
-                        customizationWheelStyle
-                        === wheel.value,
-                    }"
-                    @click="
-                      customizationWheelStyle =
-                        wheel.value
-                    "
-                >
-                  {{ wheel.label }}
-                </button>
-              </div>
-            </fieldset>
-          </div>
-        </div>
-
-        <div class="customization-actions">
-          <button
-              type="button"
-              class="button button-secondary"
-              :disabled="
-                savingCustomization
-              "
-              @click="
-                closeCustomization
+          <section
+              class="
+                style-section
               "
           >
-            Annuler
-          </button>
+            <h3>
+              Carrosserie
+            </h3>
+
+            <div
+                class="
+                  body-options
+                "
+            >
+              <button
+                  v-for="
+                    body in
+                      CAR_BODIES
+                  "
+                  :key="
+                    body.code
+                  "
+                  type="button"
+                  class="
+                    body-option
+                  "
+                  :class="{
+                    'body-option-selected':
+                      customizationBodyStyle
+                      === body.code,
+                  }"
+                  @click="
+                    customizationBodyStyle =
+                      body.code
+                  "
+              >
+                {{
+                  body.label
+                }}
+              </button>
+            </div>
+          </section>
+
+          <!-- JANTES -->
+
+          <section
+              class="
+                style-section
+              "
+          >
+            <h3>
+              Jantes
+            </h3>
+
+            <div
+                class="
+                  wheel-options
+                "
+            >
+              <button
+                  v-for="
+                    wheel in
+                      wheelStyles
+                  "
+                  :key="
+                    wheel.value
+                  "
+                  type="button"
+                  class="
+                    body-option
+                  "
+                  :class="{
+                    'body-option-selected':
+                      customizationWheelStyle
+                      === wheel.value,
+                  }"
+                  @click="
+                    customizationWheelStyle =
+                      wheel.value
+                  "
+              >
+                {{
+                  wheel.label
+                }}
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <div class="save-style-bar">
+          <span>
+            Les modifications ne sont appliquées
+            qu'après enregistrement.
+          </span>
 
           <button
               type="button"
-              class="button button-primary"
+              class="
+                button
+                button-primary
+              "
               :disabled="
                 savingCustomization
               "
@@ -1425,410 +2309,6 @@ onMounted(
           </button>
         </div>
       </section>
-
-      <!-- ===============================
-           ÉQUIPEMENTS
-      ================================ -->
-
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">
-              Configuration
-            </p>
-
-            <h2>
-              Équipements
-            </h2>
-          </div>
-        </div>
-
-        <div class="equipment-grid">
-          <article
-              v-for="
-                group in
-                  equipmentGroups
-              "
-              :key="
-                group.key
-              "
-              class="
-                equipment-slot-card
-              "
-          >
-            <h3>
-              {{ group.label }}
-            </h3>
-
-            <p
-                v-if="
-                  group.cards.length
-                  === 0
-                "
-                class="muted"
-            >
-              Aucun équipement
-            </p>
-
-            <div
-                v-else
-                class="inventory-list"
-            >
-              <div
-                  v-for="
-                    carCard in
-                      group.cards
-                  "
-                  :key="
-                    carCard.carCardId
-                  "
-                  class="inventory-card"
-                  :class="{
-                    'inventory-card-equipped':
-                      carCard.equipped,
-                  }"
-              >
-                <div>
-                  <strong>
-                    {{
-                      carCard.card.name
-                    }}
-                  </strong>
-
-                  <small>
-                    Palier
-                    {{ carCard.tier }}
-                    /
-                    {{
-                      carCard.card
-                          .maxTier
-                    }}
-                  </small>
-
-                  <p>
-                    {{
-                      formatTierEffect(
-                          carCard,
-                      )
-                    }}
-                  </p>
-                </div>
-
-                <span
-                    v-if="
-                      carCard.equipped
-                    "
-                    class="equipped-badge"
-                >
-                  Équipé
-                </span>
-
-                <button
-                    v-else
-                    type="button"
-                    class="
-                      button
-                      button-secondary
-                    "
-                    :disabled="
-                      equippingCarCardId
-                        !== null
-                    "
-                    @click="
-                      equipCarCard(
-                          carCard,
-                      )
-                    "
-                >
-                  {{
-                    equippingCarCardId
-                    === carCard.carCardId
-                        ? 'Équipement...'
-                        : 'Équiper'
-                  }}
-                </button>
-              </div>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <!-- ===============================
-           BONUS PERMANENTS
-      ================================ -->
-
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">
-              Progression
-            </p>
-
-            <h2>
-              Bonus permanents
-            </h2>
-          </div>
-        </div>
-
-        <p
-            v-if="
-              statBoostCards.length
-              === 0
-            "
-            class="muted"
-        >
-          Aucun bonus permanent obtenu.
-        </p>
-
-        <div
-            v-else
-            class="inventory-grid"
-        >
-          <article
-              v-for="
-                carCard in
-                  statBoostCards
-              "
-              :key="
-                carCard.carCardId
-              "
-              class="inventory-card"
-          >
-            <div>
-              <strong>
-                {{
-                  carCard.card.name
-                }}
-              </strong>
-
-              <small>
-                Palier
-                {{ carCard.tier }}
-                /
-                {{
-                  carCard.card
-                      .maxTier
-                }}
-              </small>
-
-              <p>
-                {{
-                  formatTierEffect(
-                      carCard,
-                  )
-                }}
-              </p>
-            </div>
-
-            <span
-                class="active-badge"
-            >
-              Toujours actif
-            </span>
-          </article>
-        </div>
-      </section>
-
-      <!-- ===============================
-           CAPACITÉS
-      ================================ -->
-
-      <section class="panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">
-              Compétences
-            </p>
-
-            <h2>
-              Capacités
-            </h2>
-          </div>
-        </div>
-
-        <p
-            v-if="
-              abilityCards.length
-              === 0
-            "
-            class="muted"
-        >
-          Aucune capacité obtenue.
-        </p>
-
-        <div
-            v-else
-            class="inventory-grid"
-        >
-          <article
-              v-for="
-                carCard in
-                  abilityCards
-              "
-              :key="
-                carCard.carCardId
-              "
-              class="inventory-card"
-          >
-            <div>
-              <strong>
-                {{
-                  carCard.card.name
-                }}
-              </strong>
-
-              <small>
-                Palier
-                {{ carCard.tier }}
-                /
-                {{
-                  carCard.card
-                      .maxTier
-                }}
-              </small>
-
-              <p>
-                {{
-                  carCard.card
-                      .description
-                }}
-              </p>
-            </div>
-
-            <span
-                v-if="
-                  carCard.equipped
-                "
-                class="active-badge"
-            >
-              Active
-            </span>
-          </article>
-        </div>
-      </section>
-
-      <!-- ===============================
-           MATCHMAKING
-      ================================ -->
-
-      <section class="opponents-section">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">
-              Matchmaking
-            </p>
-
-            <h2>
-              Adversaires disponibles
-            </h2>
-          </div>
-
-          <button
-              type="button"
-              class="
-                button
-                button-secondary
-              "
-              :disabled="
-                loadingDetails
-              "
-              @click="
-                loadSelectedCarDetails
-              "
-          >
-            {{
-              loadingDetails
-                  ? 'Recherche...'
-                  : 'Actualiser'
-            }}
-          </button>
-        </div>
-
-        <p v-if="loadingDetails">
-          Recherche d’adversaires...
-        </p>
-
-        <div
-            v-else-if="
-              opponents.length > 0
-            "
-            class="opponents-grid"
-        >
-          <OpponentCard
-              v-for="
-                opponent in
-                  opponents
-              "
-              :key="
-                opponent.carId
-              "
-              :opponent="
-                opponent
-              "
-              :selected="
-                selectedOpponent
-                    ?.carId
-                === opponent.carId
-              "
-              @select="
-                selectOpponent
-              "
-          />
-        </div>
-
-        <div
-            v-else
-            class="empty-state"
-        >
-          <h3>
-            Aucun adversaire compatible
-          </h3>
-
-          <p>
-            Aucun pilote d’un niveau proche n’est disponible
-            pour le moment.
-          </p>
-        </div>
-
-        <div
-            v-if="
-              selectedOpponent
-              !== null
-            "
-            class="pending-duel"
-        >
-          <div>
-            <strong>
-              Duel préparé
-            </strong>
-
-            <p>
-              {{
-                selectedCar
-                    .pilotName
-              }}
-              contre
-              {{
-                selectedOpponent
-                    .pilotName
-              }}
-            </p>
-          </div>
-
-          <button
-              type="button"
-              class="
-                button
-                button-primary
-              "
-              @click="
-                openDuel
-              "
-          >
-            Aller au duel
-          </button>
-        </div>
-      </section>
     </template>
   </section>
 </template>
@@ -1836,111 +2316,1303 @@ onMounted(
 <style scoped>
 /*
  * =====================================
- * VOITURE
+ * PAGE
  * =====================================
  */
 
-.selected-car-meta {
+.garage-page {
+  width:
+      min(
+          calc(
+              100%
+              - 28px
+          ),
+          1100px
+      );
+
   margin:
-      5px
       0
-      0;
-
-  opacity: 0.65;
-}
-
-.selected-car-visual {
-  width: 100%;
-  max-width: 720px;
-
-  margin:
-      10px
-      auto
-      30px;
+      auto;
 
   padding:
-      10px
+      22px
+      0
       30px;
+}
 
-  border-radius: 18px;
+/*
+ * =====================================
+ * HEADER
+ * =====================================
+ */
+
+.garage-header {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  gap: 18px;
+
+  margin-bottom: 18px;
+}
+
+.garage-header h1 {
+  margin: 0;
+
+  font-size:
+      clamp(
+          1.65rem,
+          4vw,
+          2.2rem
+      );
+}
+
+.eyebrow {
+  margin:
+      0
+      0
+      3px;
+
+  font-size: 0.68rem;
+  font-weight: 800;
+
+  letter-spacing: 0.12em;
+
+  text-transform: uppercase;
+
+  opacity: 0.45;
+}
+
+.add-symbol {
+  font-size: 1.1rem;
+}
+
+/*
+ * =====================================
+ * BASE CARD
+ * =====================================
+ */
+
+.garage-card {
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.08
+      );
+
+  border-radius: 20px;
 
   background:
-      radial-gradient(
-          circle at 50% 80%,
-          rgba(255, 255, 255, 0.07),
-          transparent 55%
+      rgba(
+          255,
+          255,
+          255,
+          0.035
       );
 }
 
 /*
  * =====================================
- * PERSONNALISATION
+ * CRÉATION
  * =====================================
  */
 
-.customization-panel {
-  overflow: hidden;
+.create-car-form {
+  margin-bottom: 18px;
+
+  padding: 18px;
 }
 
-.customization-layout {
+.card-heading {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  gap: 16px;
+
+  margin-bottom: 16px;
+}
+
+.card-heading h2,
+.card-heading h3 {
+  margin: 0;
+}
+
+.close-button {
+  width: 34px;
+  height: 34px;
+
+  border: 0;
+  border-radius: 50%;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font-size: 1.25rem;
+}
+
+.create-fields {
   display: grid;
 
   grid-template-columns:
-      minmax(0, 1.3fr)
-      minmax(300px, 0.7fr);
+      minmax(
+          0,
+          1fr
+      )
+      auto
+      auto;
 
-  gap: 30px;
+  align-items: end;
 
-  align-items: center;
+  gap: 12px;
 }
 
-.customization-preview {
-  min-width: 0;
+.field {
+  display: grid;
 
-  padding: 25px;
+  gap: 7px;
+}
+
+.field > span {
+  font-size: 0.72rem;
+
+  opacity: 0.6;
+}
+
+.field input[type='text'] {
+  min-height: 42px;
+
+  padding:
+      0
+      12px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.12
+      );
+
+  border-radius: 10px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.04
+      );
+
+  color: inherit;
+}
+
+.color-field input {
+  width: 54px;
+  height: 42px;
+}
+
+/*
+ * =====================================
+ * SÉLECTEUR VOITURES
+ * =====================================
+ */
+
+.garage-selector-section {
+  margin-bottom: 14px;
+}
+
+.section-title-row {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  margin-bottom: 8px;
+
+  padding:
+      0
+      3px;
+
+  font-size: 0.75rem;
+  font-weight: 700;
+
+  opacity: 0.6;
+}
+
+.section-title-row small {
+  display: flex;
+
+  min-width: 24px;
+  height: 24px;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 99px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
+}
+
+.garage-list {
+  display: flex;
+
+  gap: 10px;
+
+  overflow-x: auto;
+
+  padding:
+      2px
+      2px
+      8px;
+
+  scrollbar-width: thin;
+}
+
+.garage-list > * {
+  flex:
+      0
+      0
+      min(
+          280px,
+          82vw
+      );
+}
+
+/*
+ * =====================================
+ * HERO
+ * =====================================
+ */
+
+.car-hero {
+  overflow: hidden;
+
+  padding:
+      20px
+      22px
+      16px;
+
+  background:
+      radial-gradient(
+          circle at 50% 45%,
+          rgba(
+              255,
+              255,
+              255,
+              0.075
+          ),
+          transparent 55%
+      ),
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+}
+
+.hero-heading {
+  position: relative;
+
+  z-index: 3;
+
+  display: flex;
+
+  align-items: flex-start;
+
+  justify-content:
+      space-between;
+
+  gap: 16px;
+}
+
+.hero-heading h2 {
+  margin:
+      0
+      0
+      8px;
+
+  font-size:
+      clamp(
+          1.55rem,
+          5vw,
+          2.2rem
+      );
+}
+
+.pilot-meta {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 6px;
+}
+
+.pilot-meta span {
+  padding:
+      5px
+      8px;
+
+  border-radius: 7px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.055
+      );
+
+  font-size: 0.65rem;
+
+  opacity: 0.7;
+}
+
+.style-shortcut {
+  padding:
+      7px
+      10px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.1
+      );
+
+  border-radius: 9px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.04
+      );
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.hero-car,
+.preview-car {
+  position: relative;
+
+  width: 100%;
+  max-width: 720px;
+
+  margin:
+      -4px
+      auto
+      0;
+
+  padding:
+      8px
+      20px
+      2px;
+}
+
+.garage-floor {
+  position: absolute;
+
+  left: 18%;
+  right: 18%;
+  bottom: 15%;
+
+  height: 12px;
+
+  border-radius: 50%;
+
+  background:
+      rgba(
+          0,
+          0,
+          0,
+          0.32
+      );
+
+  filter:
+      blur(8px);
+}
+
+/*
+ * =====================================
+ * STATS
+ * =====================================
+ */
+
+.hero-stats {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          4,
+          1fr
+      );
+
+  gap: 8px;
+}
+
+.hero-stats article {
+  position: relative;
+
+  display: grid;
+
+  padding:
+      10px
+      11px;
+
+  border-radius: 11px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.045
+      );
+}
+
+.hero-stats span {
+  font-size: 0.63rem;
+
+  opacity: 0.5;
+}
+
+.hero-stats strong {
+  margin-top: 2px;
+
+  font-size: 1.15rem;
+}
+
+.hero-stats small {
+  position: absolute;
+
+  right: 9px;
+  bottom: 9px;
+
+  font-size: 0.6rem;
+
+  opacity: 0.45;
+}
+
+.stats-loading {
+  padding: 14px;
+
+  text-align: center;
+
+  font-size: 0.75rem;
+
+  opacity: 0.5;
+}
+
+/*
+ * =====================================
+ * TABS
+ * =====================================
+ */
+
+.garage-tabs {
+  position: sticky;
+
+  top: 6px;
+
+  z-index: 30;
+
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          4,
+          minmax(
+              90px,
+              1fr
+          )
+      );
+
+  gap: 4px;
+
+  overflow-x: auto;
+
+  margin:
+      14px
+      0;
+
+  padding: 5px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
+
+  border-radius: 14px;
+
+  background:
+      rgba(
+          20,
+          22,
+          26,
+          0.93
+      );
+
+  backdrop-filter:
+      blur(14px);
+}
+
+.garage-tab {
+  min-height: 40px;
+
+  padding:
+      7px
+      10px;
+
+  border: 0;
+
+  border-radius: 10px;
+
+  background:
+      transparent;
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font-size: 0.72rem;
+  font-weight: 700;
+
+  opacity: 0.45;
+}
+
+.garage-tab-active {
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.09
+      );
+
+  opacity: 1;
+}
+
+.garage-tab-content {
+  animation:
+      tab-enter
+      170ms
+      ease;
+}
+
+@keyframes tab-enter {
+  from {
+    opacity: 0;
+
+    transform:
+        translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+        translateY(0);
+  }
+}
+
+/*
+ * =====================================
+ * APERÇU
+ * =====================================
+ */
+
+.summary-grid {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          3,
+          minmax(
+              0,
+              1fr
+          )
+      );
+
+  gap: 10px;
+}
+
+.summary-card {
+  display: flex;
+
+  min-height: 145px;
+
+  flex-direction: column;
+
+  padding: 16px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
 
   border-radius: 16px;
 
   background:
-      radial-gradient(
-          circle at 50% 75%,
-          rgba(255, 255, 255, 0.09),
-          rgba(127, 127, 127, 0.03) 65%
+      rgba(
+          255,
+          255,
+          255,
+          0.025
       );
 }
 
-.customization-controls {
-  display: grid;
-  gap: 22px;
+.summary-number {
+  margin-bottom: 8px;
+
+  font-size: 1.55rem;
+  font-weight: 900;
 }
 
-.customization-group {
-  min-width: 0;
+.summary-card strong {
+  font-size: 0.9rem;
+}
 
-  margin: 0;
+.summary-card small {
+  margin-top: 2px;
 
+  opacity: 0.45;
+}
+
+.summary-link {
+  margin-top: auto;
   padding: 0;
 
   border: 0;
+
+  background: none;
+
+  color: inherit;
+
+  cursor: pointer;
+
+  text-align: left;
+
+  font-size: 0.7rem;
+  font-weight: 700;
+
+  opacity: 0.6;
 }
 
-.customization-group legend {
-  margin-bottom: 10px;
+.applied-effects {
+  margin-top: 10px;
 
+  padding: 18px;
+}
+
+.effects-list {
+  display: grid;
+
+  gap: 7px;
+}
+
+.effect-row {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  gap: 16px;
+
+  padding:
+      9px
+      10px;
+
+  border-radius: 9px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.035
+      );
+}
+
+.effect-row > div {
+  display: grid;
+}
+
+.effect-row small {
+  opacity: 0.45;
+}
+
+.effect-row > span {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.muted-text {
+  opacity: 0.5;
+}
+
+/*
+ * =====================================
+ * TITRES D'ONGLET
+ * =====================================
+ */
+
+.tab-heading,
+.category-heading {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  gap: 14px;
+}
+
+.tab-heading {
+  margin-bottom: 12px;
+}
+
+.tab-heading h2,
+.category-heading h3 {
+  margin: 0;
+}
+
+.tab-heading > span,
+.category-heading > span {
+  display: flex;
+
+  min-width: 30px;
+  height: 30px;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 99px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.06
+      );
+
+  font-size: 0.7rem;
+}
+
+/*
+ * =====================================
+ * ÉQUIPEMENT
+ * =====================================
+ */
+
+.equipment-grid {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          2,
+          minmax(
+              0,
+              1fr
+          )
+      );
+
+  gap: 10px;
+}
+
+.equipment-slot {
+  padding: 14px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
+
+  border-radius: 15px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+}
+
+.equipment-slot-heading {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  margin-bottom: 10px;
+}
+
+.equipment-slot-heading h3 {
+  margin: 0;
+
+  font-size: 0.85rem;
+}
+
+.slot-indicator {
+  width: 8px;
+  height: 8px;
+
+  border-radius: 50%;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.15
+      );
+}
+
+.slot-indicator-filled {
+  background:
+      rgba(
+          70,
+          200,
+          120,
+          0.9
+      );
+
+  box-shadow:
+      0
+      0
+      8px
+      rgba(
+          70,
+          200,
+          120,
+          0.35
+      );
+}
+
+.empty-slot {
+  margin: 0;
+
+  font-size: 0.72rem;
+
+  opacity: 0.4;
+}
+
+.equipment-options {
+  display: grid;
+
+  gap: 7px;
+}
+
+.inventory-card {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  gap: 10px;
+
+  padding: 10px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.06
+      );
+
+  border-radius: 10px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+}
+
+.inventory-card-equipped {
+  border-color:
+      rgba(
+          70,
+          200,
+          120,
+          0.32
+      );
+
+  background:
+      rgba(
+          70,
+          200,
+          120,
+          0.045
+      );
+}
+
+.inventory-info {
+  min-width: 0;
+}
+
+.inventory-title {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+}
+
+.inventory-title strong {
+  overflow: hidden;
+
+  font-size: 0.76rem;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.inventory-title span {
+  font-size: 0.6rem;
+
+  opacity: 0.45;
+}
+
+.inventory-info p {
+  margin:
+      3px
+      0
+      0;
+
+  font-size: 0.66rem;
+
+  opacity: 0.55;
+}
+
+.status-badge,
+.equip-button {
+  flex: 0 0 auto;
+
+  padding:
+      5px
+      7px;
+
+  border-radius: 7px;
+
+  font-size: 0.62rem;
   font-weight: 800;
+}
+
+.status-badge {
+  background:
+      rgba(
+          70,
+          200,
+          120,
+          0.12
+      );
+}
+
+.equip-button {
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.11
+      );
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.05
+      );
+
+  color: inherit;
+
+  cursor: pointer;
+}
+
+/*
+ * =====================================
+ * CARTES
+ * =====================================
+ */
+
+.card-category {
+  margin-bottom: 24px;
+}
+
+.category-heading {
+  margin-bottom: 10px;
+}
+
+.category-heading p {
+  margin:
+      3px
+      0
+      0;
+
+  font-size: 0.7rem;
+
+  opacity: 0.45;
+}
+
+.cards-grid {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          auto-fill,
+          minmax(
+              190px,
+              1fr
+          )
+      );
+
+  gap: 9px;
+}
+
+.game-card {
+  position: relative;
+
+  min-height: 130px;
+
+  padding: 14px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.075
+      );
+
+  border-radius: 14px;
+
+  background:
+      linear-gradient(
+          145deg,
+          rgba(
+              255,
+              255,
+              255,
+              0.055
+          ),
+          rgba(
+              255,
+              255,
+              255,
+              0.018
+          )
+      );
+}
+
+.game-card-tier {
+  position: absolute;
+
+  top: 9px;
+  right: 9px;
+
+  padding:
+      4px
+      6px;
+
+  border-radius: 6px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
+
+  font-size: 0.58rem;
+  font-weight: 900;
+}
+
+.game-card strong {
+  display: block;
+
+  max-width:
+      calc(
+          100%
+          - 35px
+      );
+
+  font-size: 0.82rem;
+}
+
+.game-card p {
+  margin:
+      8px
+      0;
+
+  font-size: 0.7rem;
+
+  opacity: 0.55;
+}
+
+.game-card small {
+  font-size: 0.62rem;
+
+  opacity: 0.4;
+}
+
+.empty-category {
+  padding: 18px;
+
+  border-radius: 12px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+
+  text-align: center;
+
+  font-size: 0.75rem;
+
+  opacity: 0.45;
+}
+
+/*
+ * =====================================
+ * STYLE
+ * =====================================
+ */
+
+.style-preview {
+  overflow: hidden;
+
+  margin-bottom: 12px;
+
+  padding: 5px;
+}
+
+.style-sections {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          3,
+          minmax(
+              0,
+              1fr
+          )
+      );
+
+  gap: 10px;
+}
+
+.style-section {
+  padding: 15px;
+
+  border:
+      1px solid
+      rgba(
+          255,
+          255,
+          255,
+          0.07
+      );
+
+  border-radius: 15px;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.025
+      );
+}
+
+.style-section h3 {
+  margin:
+      0
+      0
+      12px;
+
+  font-size: 0.85rem;
 }
 
 .color-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
 
-  margin-bottom: 14px;
+  flex-wrap: wrap;
+
+  gap: 8px;
 }
 
 .color-button {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
 
   padding: 0;
 
@@ -1951,19 +3623,6 @@ onMounted(
   border-radius: 50%;
 
   cursor: pointer;
-
-  transition:
-      transform
-      140ms
-      ease,
-      border-color
-      140ms
-      ease;
-}
-
-.color-button:hover {
-  transform:
-      scale(1.08);
 }
 
 .color-button-selected {
@@ -1984,179 +3643,11 @@ onMounted(
           0,
           0,
           0,
-          0.25
+          0.35
       );
 }
 
-.custom-color-picker {
-  display: flex;
-
-  align-items: center;
-
-  gap: 12px;
-
-  font-size: 0.85rem;
-}
-
-.custom-color-picker input {
-  width: 48px;
-  height: 36px;
-
-  padding: 2px;
-
-  cursor: pointer;
-}
-
-.customization-option-grid {
-  display: grid;
-
-  grid-template-columns:
-      repeat(
-          auto-fit,
-          minmax(120px, 1fr)
-      );
-
-  gap: 8px;
-}
-
-.customization-option {
-  padding:
-      11px
-      12px;
-
-  border:
-      1px solid
-      rgba(
-          127,
-          127,
-          127,
-          0.28
-      );
-
-  border-radius: 9px;
-
-  background:
-      rgba(
-          127,
-          127,
-          127,
-          0.04
-      );
-
-  color: inherit;
-
-  cursor: pointer;
-
-  font: inherit;
-
-  transition:
-      border-color
-      140ms
-      ease,
-      background
-      140ms
-      ease,
-      transform
-      140ms
-      ease;
-}
-
-.customization-option:hover {
-  transform:
-      translateY(-1px);
-
-  background:
-      rgba(
-          127,
-          127,
-          127,
-          0.09
-      );
-}
-
-.customization-option-selected {
-  border-color:
-      rgba(
-          70,
-          130,
-          230,
-          0.8
-      );
-
-  background:
-      rgba(
-          70,
-          130,
-          230,
-          0.13
-      );
-
-  font-weight: 800;
-}
-
-.customization-actions {
-  display: flex;
-
-  justify-content: flex-end;
-
-  gap: 10px;
-
-  margin-top: 26px;
-}
-
-/*
- * =====================================
- * INVENTAIRE
- * =====================================
- */
-
-.equipment-grid,
-.inventory-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.equipment-grid {
-  grid-template-columns:
-      repeat(
-          auto-fit,
-          minmax(280px, 1fr)
-      );
-}
-
-.inventory-grid {
-  grid-template-columns:
-      repeat(
-          auto-fit,
-          minmax(250px, 1fr)
-      );
-}
-
-.equipment-slot-card {
-  padding: 16px;
-
-  border:
-      1px solid
-      rgba(
-          127,
-          127,
-          127,
-          0.25
-      );
-
-  border-radius: 12px;
-}
-
-.equipment-slot-card h3 {
-  margin-top: 0;
-}
-
-.inventory-list {
-  display: grid;
-  gap: 10px;
-}
-
-.inventory-card {
+.custom-color-row {
   display: flex;
 
   align-items: center;
@@ -2164,132 +3655,412 @@ onMounted(
   justify-content:
       space-between;
 
-  gap: 16px;
+  gap: 10px;
 
-  padding: 14px;
+  margin-top: 12px;
+
+  font-size: 0.68rem;
+
+  opacity: 0.7;
+}
+
+.custom-color-row > div {
+  display: flex;
+
+  align-items: center;
+
+  gap: 7px;
+}
+
+.custom-color-row input {
+  width: 38px;
+  height: 30px;
+}
+
+.body-options,
+.wheel-options {
+  display: grid;
+
+  grid-template-columns:
+      repeat(
+          2,
+          minmax(
+              0,
+              1fr
+          )
+      );
+
+  gap: 6px;
+}
+
+.body-option {
+  min-height: 36px;
+
+  padding:
+      6px
+      8px;
 
   border:
       1px solid
       rgba(
-          127,
-          127,
-          127,
-          0.2
+          255,
+          255,
+          255,
+          0.08
       );
 
-  border-radius: 10px;
+  border-radius: 8px;
 
   background:
       rgba(
-          127,
-          127,
-          127,
-          0.05
+          255,
+          255,
+          255,
+          0.025
       );
+
+  color: inherit;
+
+  cursor: pointer;
+
+  font-size: 0.68rem;
 }
 
-.inventory-card-equipped {
+.body-option-selected {
   border-color:
       rgba(
-          50,
-          170,
-          100,
-          0.55
+          80,
+          140,
+          235,
+          0.7
       );
-}
 
-.inventory-card > div {
-  display: grid;
-  gap: 5px;
-}
-
-.inventory-card p {
-  margin: 0;
-}
-
-.inventory-card small {
-  opacity: 0.65;
-}
-
-.equipped-badge,
-.active-badge {
-  flex-shrink: 0;
-
-  padding:
-      6px
-      9px;
-
-  border-radius: 999px;
-
-  font-size: 0.75rem;
+  background:
+      rgba(
+          80,
+          140,
+          235,
+          0.12
+      );
 
   font-weight: 800;
 }
 
-.equipped-badge {
+.save-style-bar {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+      space-between;
+
+  gap: 14px;
+
+  margin-top: 12px;
+
+  padding: 12px;
+
+  border-radius: 13px;
+
   background:
       rgba(
-          50,
-          170,
-          100,
-          0.15
+          255,
+          255,
+          255,
+          0.035
       );
 }
 
-.active-badge {
-  background:
-      rgba(
-          50,
-          110,
-          210,
-          0.15
-      );
+.save-style-bar span {
+  font-size: 0.68rem;
+
+  opacity: 0.45;
 }
 
 /*
  * =====================================
- * RESPONSIVE
+ * STATES
+ * =====================================
+ */
+
+.loading-card,
+.empty-garage {
+  padding: 28px;
+
+  text-align: center;
+}
+
+.empty-icon {
+  display: flex;
+
+  width: 54px;
+  height: 54px;
+
+  align-items: center;
+  justify-content: center;
+
+  margin:
+      0
+      auto
+      12px;
+
+  border-radius: 50%;
+
+  background:
+      rgba(
+          255,
+          255,
+          255,
+          0.06
+      );
+
+  font-size: 1.3rem;
+}
+
+/*
+ * =====================================
+ * TABLETTE
  * =====================================
  */
 
 @media (
-max-width: 850px
+max-width: 800px
 ) {
-  .customization-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .customization-preview {
-    padding: 10px;
+  .style-sections {
+    grid-template-columns:
+        1fr;
   }
 }
 
-@media (
-max-width: 650px
-) {
-  .inventory-card {
-    align-items: stretch;
+/*
+ * =====================================
+ * MOBILE
+ * =====================================
+ */
 
-    flex-direction: column;
+@media (
+max-width: 600px
+) {
+  .garage-page {
+    width:
+        calc(
+            100%
+            - 20px
+        );
+
+    padding-top: 14px;
   }
 
-  .inventory-card button {
+  .garage-header {
+    margin-bottom: 12px;
+  }
+
+  .add-label {
+    display: none;
+  }
+
+  .add-car-button {
+    min-width: 42px;
+
+    padding:
+        8px
+        12px;
+  }
+
+  .create-fields {
+    grid-template-columns:
+        1fr
+        auto;
+  }
+
+  .create-button {
+    grid-column:
+        1
+        / -1;
+
     width: 100%;
   }
 
-  .selected-car-visual {
+  /*
+   * HERO MOBILE
+   */
+
+  .car-hero {
     padding:
-        5px
+        16px
+        12px
+        12px;
+  }
+
+  .hero-car {
+    margin-top: 0;
+
+    padding:
         0;
   }
 
-  .customization-actions {
-    flex-direction: column;
+  .hero-stats {
+    gap: 5px;
   }
 
-  .customization-actions
-  .button {
+  .hero-stats article {
+    padding:
+        8px
+        7px;
+  }
+
+  .hero-stats span {
+    font-size: 0.56rem;
+  }
+
+  .hero-stats strong {
+    font-size: 1rem;
+  }
+
+  .hero-stats small {
+    display: none;
+  }
+
+  /*
+   * TABS MOBILE
+   */
+
+  .garage-tabs {
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(
+                80px,
+                1fr
+            )
+        );
+
+    overflow-x: auto;
+  }
+
+  /*
+   * APERÇU MOBILE
+   */
+
+  .summary-grid {
+    grid-template-columns:
+        repeat(
+            3,
+            1fr
+        );
+
+    gap: 6px;
+  }
+
+  .summary-card {
+    min-height: 125px;
+
+    padding: 11px;
+  }
+
+  .summary-number {
+    font-size: 1.25rem;
+  }
+
+  .summary-card strong {
+    font-size: 0.72rem;
+  }
+
+  .summary-card small {
+    font-size: 0.58rem;
+  }
+
+  .summary-link {
+    font-size: 0.6rem;
+  }
+
+  /*
+   * ÉQUIPEMENTS MOBILE
+   */
+
+  .equipment-grid {
+    grid-template-columns:
+        1fr;
+  }
+
+  /*
+   * CARTES MOBILE
+   */
+
+  .cards-grid {
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(
+                0,
+                1fr
+            )
+        );
+  }
+
+  /*
+   * STYLE MOBILE
+   */
+
+  .preview-car {
+    padding:
+        0;
+  }
+
+  .save-style-bar {
+    position: sticky;
+
+    bottom:
+        calc(
+            86px
+            + env(
+            safe-area-inset-bottom
+            )
+        );
+
+    z-index: 20;
+
+    flex-direction: column;
+
+    align-items: stretch;
+
+    background:
+        rgba(
+            20,
+            22,
+            26,
+            0.96
+        );
+
+    backdrop-filter:
+        blur(16px);
+  }
+
+  .save-style-bar .button {
     width: 100%;
+  }
+}
+
+/*
+ * =====================================
+ * PETITS MOBILES
+ * =====================================
+ */
+
+@media (
+max-width: 390px
+) {
+  .pilot-meta span {
+    font-size: 0.58rem;
+  }
+
+  .cards-grid {
+    grid-template-columns:
+        1fr;
+  }
+
+  .summary-card {
+    padding: 9px;
   }
 }
 </style>
